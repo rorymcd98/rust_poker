@@ -79,7 +79,7 @@ impl Card {
         }
     }
 
-    pub fn new_random_card() -> Card {
+    fn new_random_card() -> Card {
         let mut rng = rand::thread_rng();
         let card = rng.gen_range(0..52);
 
@@ -108,13 +108,27 @@ impl Card {
         }
     }
 
+    pub fn get_n_more_cards(existing_cards: &Vec<Card>, n: usize) -> Vec<Card> {
+        if n + existing_cards.len() > 52 {
+            panic!("Cannot get more than 52 cards");
+        }
+
+        let mut new_cards = Vec::new();
+        while new_cards.len() < n {
+            let new_card = Card::new_random_card();
+            if !existing_cards.contains(&new_card) && !new_cards.contains(&new_card) {
+                new_cards.push(new_card);
+            }
+        }
+        new_cards
+    }
+
     pub fn serialise(&self) -> u8 {
         let suit = match self.suit {
             Suit::Spades => 0,
             Suit::Hearts => 1,
             Suit::Diamonds => 2,
             Suit::Clubs => 3,
-            _ => panic!("Invalid suit"),
         };
 
         let rank = match self.rank {
@@ -131,7 +145,6 @@ impl Card {
             Rank::Queen => 10,
             Rank::King => 11,
             Rank::Ace => 12,
-            _ => panic!("Invalid rank"),
         };
 
         (suit << 4) | rank
@@ -142,12 +155,67 @@ impl Card {
         let rank = Rank::from_int(serialised_card & 0b00001111);
         Card::new(suit, rank)
     }
+ 
+    pub fn all_suited_combos(suit: Suit) -> impl Iterator<Item = (Card, Card)> {
+        (0..12).flat_map(move |first_rank| {
+            ((first_rank+1)..13).map({
+                let suit = suit.clone();
+                move |second_rank| {
+                    (
+                        Card::new(suit.clone(), Rank::from_int(first_rank)),
+                        Card::new(suit.clone(), Rank::from_int(second_rank)),
+                    )
+                }
+            })
+        })
+    }
+
+    pub fn all_offsuit_combos(first_suit: Suit, second_suit: Suit) -> impl Iterator<Item = (Card, Card)> {
+        (0..12).flat_map(move |first_rank| {
+            ((first_rank+1)..13).map({
+                let first_suit = first_suit.clone();
+                let second_suit = second_suit.clone();
+                move |second_rank| {
+                    (
+                        Card::new(first_suit.clone(), Rank::from_int(first_rank)),
+                        Card::new(second_suit.clone(), Rank::from_int(second_rank)),
+                    )
+                }
+            })
+        })
+    }
+}
+
+impl Default for Card {
+    fn default() -> Self {
+        Card::new(Suit::Spades, Rank::Two)
+    }   
+}
+
+/// Conveniently, our serialisation function allows for sensible sorting of cards
+impl PartialOrd for Card {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.serialise().cmp(&other.serialise()))
+    }
+}
+
+impl Ord for Card {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.serialise().cmp(&other.serialise())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
     use super::*;
+
+    #[test]
+    fn print_all_combos() {
+        for (card1, card2) in Card::all_suited_combos(Suit::Spades) {
+            println!("{:?} {:?}", card1, card2);
+        }
+    }
 
     #[test]
     fn test_suit_from_int() {
@@ -224,9 +292,12 @@ mod tests {
     }
 
     #[test]
-    fn test_get_one_more_card() {
+    fn test_get_n_more_cards() {
         let existing_cards = Card::new_random_cards(5);
-        let new_card = Card::get_one_more_card(&existing_cards);
-        assert!(!existing_cards.contains(&new_card));
+        let new_cards = Card::get_n_more_cards(&existing_cards, 4);
+        assert_eq!(new_cards.len(), 4);
+        for card in new_cards {
+            assert!(!existing_cards.contains(&card));
+        }
     }
 }

@@ -1,5 +1,7 @@
 use crate::models::card::Card;
 
+pub const DEFAULT_ACTION_COUNT: usize = 3;
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Action {
     CheckFold,

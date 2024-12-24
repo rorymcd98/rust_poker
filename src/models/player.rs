@@ -30,7 +30,7 @@ impl Player {
         }
     }
 
-    pub fn is_opponent(&self) -> bool {
+    pub fn is_opponent(self) -> bool {
         match self {
             Player::Opponent => true,
             _ => false,

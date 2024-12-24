@@ -4,16 +4,17 @@ use crate::models::card::Rank;
 use crate::models::card::Suit;
 use crate::models::player::Player;
 
+// A live record of the game state that also acts as a key to the various strategies
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ActionHistory {
-    pub smallblind_player: Player,
+    pub current_player: Player,
     pub history: Vec::<Action>, // TODO - Try to make this a mutable reference
 }
 
 impl ActionHistory {
-    pub fn new(smallblind_player: Player, history: Vec<Action>) -> ActionHistory {
+    pub fn new(current_player: Player, history: Vec<Action>) -> ActionHistory {
         ActionHistory {
-            smallblind_player: smallblind_player,
+            current_player: current_player,
             history: history,
         }
     }
@@ -25,7 +26,7 @@ impl ActionHistory {
         let is_special = self.history.len() == 3 && self.history[2].is_call(); // In the case of a preflop bb call
 
         let mut serialised_history = Vec::new();
-        serialised_history.push(self.smallblind_player.serialise());
+        serialised_history.push(self.current_player.serialise());
 
         for action in &*self.history {
             serialised_history.push(action.serialise());
@@ -92,12 +93,12 @@ impl<'a> Iterator for ActionHistoryByteStreamIterator<'a> {
 
     fn next(&mut self) -> Option<ActionHistory> {
         let mut history = Vec::<Action>::new();
-        let smallblind_player_byte = self.byte_stream_iterator.next();
-        if smallblind_player_byte.is_none() {
+        let current_player_byte = self.byte_stream_iterator.next();
+        if current_player_byte.is_none() {
             return None;
         }
         
-        let smallblind_player = Player::deserialise(smallblind_player_byte.unwrap());
+        let current_player = Player::deserialise(current_player_byte.unwrap());
     
         // Hole cards
         let hole_card_one = Action::deserialise(self.byte_stream_iterator.next().expect("First hole card failed to be iterated to"));
@@ -111,23 +112,23 @@ impl<'a> Iterator for ActionHistoryByteStreamIterator<'a> {
     
         let first_action = Action::deserialise(self.byte_stream_iterator.next().expect("First action failed to be iterated to"));
         if first_action.is_deal() {
-            return Some(ActionHistory::new(smallblind_player, history)); // Return remaining iterator
+            return Some(ActionHistory::new(current_player, history)); // Return remaining iterator
         }
         history.push(first_action);
     
         let second_action = Action::deserialise(self.byte_stream_iterator.next().expect("Second action failed to be iterated to"));
         if history.last().unwrap().is_call() && second_action.is_deal() {
-            return Some(ActionHistory::new(smallblind_player, history)); // Return remaining iterator
+            return Some(ActionHistory::new(current_player, history)); // Return remaining iterator
         }
         history.push(second_action);
     
         while let Some(byte) = self.byte_stream_iterator.next() {
             let action = Action::deserialise(&byte);
             if Self::is_terminal_serialiastion(&history.last().unwrap(), &action) {
-                return Some(ActionHistory::new(smallblind_player, history));
+                return Some(ActionHistory::new(current_player, history));
             } else if action.is_deal() {
                 if Self::is_terminal_serialiastion(&history.last().unwrap(), &action) {
-                    return Some(ActionHistory::new(smallblind_player, history));
+                    return Some(ActionHistory::new(current_player, history));
                 }
                 history.push(action);
     
@@ -148,7 +149,7 @@ impl<'a> Iterator for ActionHistoryByteStreamIterator<'a> {
         while let Some(byte) = self.byte_stream_iterator.next() {
             let action = Action::deserialise(byte);
             if Self::is_terminal_serialiastion(history.last().unwrap(), &action) {
-                return Some(ActionHistory::new(smallblind_player, history));
+                return Some(ActionHistory::new(current_player, history));
             }
             history.push(action);
         }
@@ -174,7 +175,7 @@ mod tests {
     }
 
     #[test]
-    fn test_serialise_history_smallblind() {
+    fn test_serialise_history_currentplayer() {
         let history = vec![
             Action::Deal(Card::new(Suit::Spades, Rank::Two)),
             Action::Deal(Card::new(Suit::Hearts, Rank::Three)),
@@ -402,7 +403,7 @@ mod tests {
 
         let mut action_history_iterator = ActionHistoryByteStreamIterator::new(&serialised);
         let deserialised_history = action_history_iterator.next().unwrap();
-        assert_eq!(deserialised_history.smallblind_player, player.clone());
-        assert_ne!(deserialised_history.smallblind_player, player.get_opposite());
+        assert_eq!(deserialised_history.current_player, player.clone());
+        assert_ne!(deserialised_history.current_player, player.get_opposite());
     }
 }
