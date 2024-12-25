@@ -1,7 +1,7 @@
 const TRAVERSER_BYTE: u8 = 0b10000000;
 const OPPONENT_BYTE: u8 = 0b01000000;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Player {
     Traverser,
     Opponent,

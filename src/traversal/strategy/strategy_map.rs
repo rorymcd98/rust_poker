@@ -16,4 +16,8 @@ impl StrategyMap {
     pub fn get_or_create_strategy_branch(&mut self, info_set: InfoNode) -> &mut StrategyBranch {
         self.map.entry(info_set).or_insert(StrategyBranch::new())
     }
+
+    pub fn insert_strategy_branch(&mut self, info_set: InfoNode, strategy_branch: StrategyBranch) {
+        self.map.insert(info_set, strategy_branch);
+    }
 }

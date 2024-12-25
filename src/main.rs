@@ -1,8 +1,9 @@
 mod models;
+mod traversal;
 
-use crate::models::card::Card;
+use crate::traversal::main_traverse::TreeTraverser;
 
 fn main() {
-    let card = Card::new_random_card();
-    println!("{:?}", card);
+    let mut traverser = TreeTraverser::new(1);
+    traverser.BeginTreeTraversal();
 }
