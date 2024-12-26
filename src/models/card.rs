@@ -1,4 +1,5 @@
 use rand::Rng;
+use std::hash::{Hash, Hasher};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Suit {
@@ -17,6 +18,26 @@ impl Suit {
             3 => Suit::Clubs,
             _ => panic!("Invalid suit"),
         }
+    }
+    
+    pub fn to_int(&self) -> u8 {
+        match self {
+            Suit::Spades => 0,
+            Suit::Hearts => 1,
+            Suit::Diamonds => 2,
+            Suit::Clubs => 3,
+        }
+    }
+
+    pub fn random() -> Suit {
+        let mut rng = rand::thread_rng();
+        Suit::from_int(rng.gen_range(0..4))
+    }
+}
+
+impl Default for Suit {
+    fn default() -> Self {
+        Suit::Spades
     }
 }
 
@@ -56,12 +77,54 @@ impl Rank {
             _ => panic!("Invalid rank"),
         }
     }
+
+    pub fn to_int(&self) -> u8 {
+        match self {
+            Rank::Two => 0,
+            Rank::Three => 1,
+            Rank::Four => 2,
+            Rank::Five => 3,
+            Rank::Six => 4,
+            Rank::Seven => 5,
+            Rank::Eight => 6,
+            Rank::Nine => 7,
+            Rank::Ten => 8,
+            Rank::Jack => 9,
+            Rank::Queen => 10,
+            Rank::King => 11,
+            Rank::Ace => 12,
+        }
+    }
+
+    pub fn to_prime(&self) -> u8 {
+        match self {
+            Rank::Two => 2,
+            Rank::Three => 3,
+            Rank::Four => 5,
+            Rank::Five => 7,
+            Rank::Six => 11,
+            Rank::Seven => 13,
+            Rank::Eight => 17,
+            Rank::Nine => 19,
+            Rank::Ten => 23,
+            Rank::Jack => 29,
+            Rank::Queen => 31,
+            Rank::King => 37,
+            Rank::Ace => 41,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Card {
     pub suit: Suit,
     pub rank: Rank,
+}
+
+impl Hash for Card {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write_u8(self.serialise());
+    }
 }
 
 impl Card {
@@ -209,13 +272,6 @@ impl Ord for Card {
 mod tests {
     use rstest::rstest;
     use super::*;
-
-    #[test]
-    fn print_all_combos() {
-        for (card1, card2) in Card::all_suited_combos(Suit::Spades) {
-            println!("{:?} {:?}", card1, card2);
-        }
-    }
 
     #[test]
     fn test_suit_from_int() {

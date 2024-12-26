@@ -94,29 +94,11 @@ impl GameStateHelper {
     }
 
     fn evaluate_terminal_state(&self) -> f64 {
-        let action_history = &self.action_history.borrow().history;
-        let last_two_actions = &action_history[action_history.len() - 2..];
-        // TODO - handle the preflop edge case
-        let is_river = self.board.borrow().len() == 5;
-        is_river || match last_two_actions {
-            [Action::Bet, Action::CheckFold] => true,
-            _ => false,
-        }
+        0.0
     }
 
-    fn evaluate_terminal_river(&self) -> f64 {
-        let traverser_hand = self.traverser_hand;
-        let opponent_hand = self.opponent_hand;
-        let board = self.board.borrow();
-        let traverser_hand_strength = Card::evaluate_hand_strength(&traverser_hand, &board.borrow());
-        let opponent_hand_strength = Card::evaluate_hand_strength(&opponent_hand, &board.borrow());
-        if traverser_hand_strength > opponent_hand_strength {
-            return 1.0;
-        } else if traverser_hand_strength < opponent_hand_strength {
-            return -1.0;
-        } else {
-            return 0.0;
-        }
+    fn evaluate_shodown(&self) -> f64 {
+        0.0
     }
 
     fn evaluate_terminal_fold(&self) -> f64 {
