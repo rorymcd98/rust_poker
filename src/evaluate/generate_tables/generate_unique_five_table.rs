@@ -1,10 +1,10 @@
 use crate::{Card, Rank, Suit};
-use crate::evaluate::evaluate_hand::{DISTINCT_COUNT};
+use crate::evaluate::evaluate_hand::{BIT_REP_LIMIT};
 use super::generate_flush_table::{generate_unique_fives, hand_to_id};
 use itertools::Itertools;
 
 /// Generate a lookup table for unique five card hands that aren't flushes
-pub fn generate_unique_five_table() -> [u16; DISTINCT_COUNT + 1] {
+pub fn generate_unique_five_table() -> [u16; BIT_REP_LIMIT + 1] {
     const LOWER_TAKE_INDEX: usize = 0;
     const UPPER_TAKE_INDEX: usize = 5853; // 1277 high cards + 2860 pairs + 858 two-pair + 858 ToaK 
     generate_unique_fives(LOWER_TAKE_INDEX + 1, UPPER_TAKE_INDEX +1)
@@ -12,13 +12,13 @@ pub fn generate_unique_five_table() -> [u16; DISTINCT_COUNT + 1] {
 
 #[cfg(test)]
 mod tests {
-    use crate::evaluate::{evaluate_hand::{id_to_card_string, unique_rank_mask}, generate_tables::generate_flush_table::{NON_STRAIGHT_COUNT, STRAIGHT_COUNT}};
+    use crate::evaluate::{evaluate_hand::{id_mask_to_string, unique_rank_mask}, generate_tables::generate_flush_table::{NON_STRAIGHT_COUNT, STRAIGHT_COUNT}};
 
     use super::*;
     use lazy_static::lazy_static;
 
     lazy_static! {
-        static ref FIVE_UNIQUES_MAP: [u16; DISTINCT_COUNT + 1] = generate_unique_five_table();
+        static ref FIVE_UNIQUES_MAP: [u16; BIT_REP_LIMIT + 1] = generate_unique_five_table();
     }
 
     fn evaluate_fives(hand: &Vec<Card>) -> u16 {
@@ -45,7 +45,7 @@ mod tests {
 
     #[test]
     fn assert_rankings_are_exact() {
-        let mut seen_rankings = vec![0; DISTINCT_COUNT + 1];
+        let mut seen_rankings = vec![0; BIT_REP_LIMIT + 1];
         let mut count = 0;
         for ranking in FIVE_UNIQUES_MAP.iter() {
             if ranking == &0 {
@@ -53,7 +53,7 @@ mod tests {
             }
             count += 1;
             if seen_rankings[*ranking as usize] != 0 {
-                panic!("Flush table has duplicate entry {}", id_to_card_string((*ranking as u32) << 8));
+                panic!("Flush table has duplicate entry {}", id_mask_to_string((*ranking as u32) << 12));
             }
             seen_rankings[*ranking as usize] += 1;
         }

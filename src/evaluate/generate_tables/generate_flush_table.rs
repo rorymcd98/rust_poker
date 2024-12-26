@@ -4,7 +4,7 @@ use crate::Card;
 use crate::Rank;
 use crate::Suit;
 use itertools::Itertools;
-use crate::evaluate::evaluate_hand::{CardId, PRIME_MASK, DISTINCT_COUNT, card_to_id, unique_rank_mask};
+use crate::evaluate::evaluate_hand::{CardId, PRIME_MASK, BIT_REP_LIMIT, card_to_id, unique_rank_mask};
 
 pub const NON_STRAIGHT_COUNT: usize = 1277; // The number of hands consisting of 5 unique cards which are not straights
 pub const STRAIGHT_COUNT: usize = 10;
@@ -163,7 +163,7 @@ pub fn hand_to_id(hand: &Vec<Card>) -> Vec<CardId> {
     hand.iter().map(|card| card_to_id(card)).collect::<Vec<u32>>()
 }
 
-pub fn generate_unique_fives(lower_take_index: usize, upper_take_index: usize) -> [u16; DISTINCT_COUNT + 1] {
+pub fn generate_unique_fives(lower_take_index: usize, upper_take_index: usize) -> [u16; BIT_REP_LIMIT + 1] {
     let mut lower_take_set = HashMap::<u16, u32>::new();
     let mut upper_take_set = HashMap::<u16, u32>::new();
 
@@ -196,7 +196,7 @@ pub fn generate_unique_fives(lower_take_index: usize, upper_take_index: usize) -
     let mut sorted_upper: Vec<_> = upper_take_set.iter().collect();
     sorted_upper.sort_by_key(|&(_, v)| v);
 
-    let mut return_flushes = [0u16; DISTINCT_COUNT + 1];
+    let mut return_flushes = [0u16; BIT_REP_LIMIT + 1];
 
     for (index, (rank_mask, _)) in sorted_lower.iter().enumerate().take(1277) {
         return_flushes[(**rank_mask) as usize] = (index + lower_take_index) as u16;
@@ -208,21 +208,21 @@ pub fn generate_unique_fives(lower_take_index: usize, upper_take_index: usize) -
     return_flushes
 }
 
-pub fn generate_flushes_table() -> [u16; DISTINCT_COUNT + 1] {
-    let lower_take_index = 6338 + 1; // 7937 - 322 - 10, 322 == 156 quads + 156 full houses + 10 straight flushes
-    let upper_take_index = 7927 + 1; // 7937 - 10, 10 straight flushes
+pub fn generate_flushes_table() -> [u16; BIT_REP_LIMIT + 1] {
+    let lower_take_index = 5863 + 1; // 7937 - 322 - 10, 322 == 156 quads + 156 full houses + 10 straight flushes
+    let upper_take_index = 7452 + 1; // 7937 - 10, 10 straight flushes
     generate_unique_fives(lower_take_index, upper_take_index)
 }
 
 #[cfg(test)]
 mod flush_tests {
-    use crate::evaluate::evaluate_hand::id_to_card_string;
+    use crate::evaluate::evaluate_hand::{id_mask_to_string, DISTINCT_CARD_COMBOS};
 
     use super::*;
     use lazy_static::lazy_static;
 
     lazy_static! {
-        static ref FLUSHES_MAP: [u16; DISTINCT_COUNT + 1] = generate_flushes_table();
+        static ref FLUSHES_MAP: [u16; BIT_REP_LIMIT + 1] = generate_flushes_table();
     }
 
     fn evaluate_flush(hand: &Vec<Card>) -> u16 {
@@ -249,7 +249,7 @@ mod flush_tests {
 
     #[test]
     fn assert_rankings_are_exact() {
-        let mut seen_rankings = vec![0; DISTINCT_COUNT + 1];
+        let mut seen_rankings = vec![0; BIT_REP_LIMIT + 1];
         let mut count = 0;
         for ranking in FLUSHES_MAP.iter() {
             if ranking == &0 {
@@ -257,7 +257,7 @@ mod flush_tests {
             }
             count += 1;
             if seen_rankings[*ranking as usize] != 0 {
-                panic!("Flush table has duplicate entry {}", id_to_card_string((*ranking as u32) << 8));
+                panic!("Flush table has duplicate entry {}", id_mask_to_string((*ranking as u32) << 12));
             }
             seen_rankings[*ranking as usize] += 1;
         }
@@ -419,6 +419,6 @@ mod flush_tests {
         let eval = evaluate_flush(&royal_flush);
 
         println!("Royal flush: {}", eval);
-        assert_eq!(eval, DISTINCT_COUNT as u16);
+        assert_eq!(eval, DISTINCT_CARD_COMBOS as u16);
     }
 }

@@ -4,7 +4,7 @@ use crate::Card;
 use crate::Rank;
 use crate::Suit;
 use itertools::Itertools;
-use crate::evaluate::evaluate_hand::{CardId, PRIME_MASK, DISTINCT_COUNT, card_to_id, unique_rank_mask};
+use crate::evaluate::evaluate_hand::{CardId, PRIME_MASK, BIT_REP_LIMIT, card_to_id, unique_rank_mask};
 
 /// Hand evaluation for cards which aren't flushes, straights, or high cards
 #[derive(Debug, PartialEq, Eq)]
@@ -155,12 +155,12 @@ mod classify_hands_tests {
 
 // Evaluate the remaining cards that don't form part of the pair, trip etc.
 fn evaluate_high_cards(hand: &Vec<Rank>, skip: &Vec<Rank>) -> u32 { // maximum product is 41*37*31 = 47,027 which is conveniently 16 bits
-    let mut prime_product = 1;
+    let mut prime_product: u16 = 1;
     for rank in hand {
         if skip.contains(rank) {
             continue;
         }
-        prime_product *= rank.to_prime();
+        prime_product *= rank.to_prime() as u16; // keep this at 16 bits to check for int overflow
     }
     prime_product as u32
 }
@@ -194,7 +194,7 @@ pub fn evaluate_three_of_a_kind(pair: HandType, cards: Vec<Rank>) -> u32 {
 
 pub fn evaluate_full_house(full_house: HandType, cards: Vec<Rank>) -> u32 {
     match full_house {
-        HandType::TwoPair(rank1, rank2) => {
+        HandType::FullHouse(rank1, rank2) => {
             return (rank1.to_prime() as u32) << 24 | (rank2.to_prime() as u32) << 16 | evaluate_high_cards(&cards, &vec![rank1, rank2]);
         },
         _ => panic!("Unexepected hand type"),
