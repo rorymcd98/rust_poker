@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use crate::models::Deck;
 use crate::Card;
 use crate::Rank;
 use crate::Suit;

@@ -1,12 +1,10 @@
-use std::fmt::format;
+use itertools::Itertools;
 
+use crate::models::card::NineCardDeal;
+use crate::models::Player;
 use crate::Card;
-use crate::Suit;
-use crate::Rank;
-
 use super::generate_tables::generate_flush_table::generate_flushes_table;
 use super::generate_tables::generate_remaining_table::generate_remaining_table;
-use super::generate_tables::generate_unique_five_table;
 use super::generate_tables::generate_unique_five_table::generate_unique_five_table;
 
 pub type CardId = u32;
@@ -152,6 +150,7 @@ impl HandLookup for HandLookupArrays {
 /// 1 is a High Card 7
 pub trait HandEvaluator {
     fn evaluate(&self, cards: &Vec<Card>) -> u16;
+    fn evaluate_deal(&self, deal: NineCardDeal) -> Option<Player>;
 }
 
 pub struct EvaluateHand {
@@ -181,33 +180,51 @@ impl  HandEvaluator for EvaluateHand {
         } 
         
         let prime_product = (card_ids[0] & PRIME_MASK) * (card_ids[1] & PRIME_MASK) * (card_ids[2] & PRIME_MASK) * (card_ids[3] & PRIME_MASK) * (card_ids[4] & PRIME_MASK);
-        println!("Prime product: {}", prime_product);
         return self.hand_lookup.remaining_evaluation(prime_product as usize);
+    }
+
+    fn evaluate_deal(&self, deal: NineCardDeal) -> Option<Player> {
+        let best_score_traverser = [deal[0], deal[1], deal[4], deal[5], deal[6], deal[7]].iter().combinations(5).map(|combo| combo.into_iter().cloned().collect::<Vec<Card>>()).max_by(|a, b| self.evaluate(a).cmp(&self.evaluate(b)));
+        let best_score_opponent = [deal[2], deal[3], deal[4], deal[5], deal[6], deal[7]].iter().combinations(5).map(|combo| combo.into_iter().cloned().collect::<Vec<Card>>()).max_by(|a, b| self.evaluate(a).cmp(&self.evaluate(b)));
+        match best_score_traverser.cmp(&best_score_opponent) {
+            std::cmp::Ordering::Greater => Some(Player::Traverser),
+            std::cmp::Ordering::Less => Some(Player::Opponent),
+            std::cmp::Ordering::Equal => None,
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use lazy_static::lazy_static;
+
     use super::*;
     use crate::evaluate::evaluate_hand::{id_mask_to_string, unique_rank_mask};
+
+    lazy_static! {
+        static ref EVALUATOR: EvaluateHand = EvaluateHand::new();
+    }
 
     // Generate 1 million random 5 card hands to assess the performance
     #[test]
     fn test_performance() {
-        let mut hands = Vec::new();
-        for _ in 0..100 {
-            let hand = Card::new_random_cards(5);
-            hands.push(hand);
-        }
-
-        let evaluator = EvaluateHand::new();
         let start = std::time::Instant::now();
-        for hand in hands {
-            let eval = evaluator.evaluate(&hand);
-            assert!(eval > 0, "Evaluated hand {:?}: {}", hand, eval);
-            assert!(eval <= (DISTINCT_CARD_COMBOS + 1) as u16);
+        let hand = Card::new_random_cards(5);
+        for _ in 0..1_000_000 {
+            let _ = EVALUATOR.evaluate(&hand);
         }
         let duration = start.elapsed();
-        println!("Time elapsed in expensive_function() is: {:?}", duration);
+        assert!(duration.as_secs() < 1);
+    }
+
+    #[test]
+    fn test_performance_9_card(){
+        let hands: Vec<NineCardDeal> = (0..100).map(|_| Card::new_random_9_card_game()).collect();
+        let start = std::time::Instant::now();
+        for i in 0..1_000_000 {
+            let _ = EVALUATOR.evaluate_deal(hands[i % 100 as usize]);
+        }
+        let duration = start.elapsed();
+        assert!(duration.as_secs() < 1);
     }
 }

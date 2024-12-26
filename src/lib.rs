@@ -7,3 +7,6 @@ pub use models::Suit;
 
 mod traversal;
 pub use traversal::main_traverse::TreeTraverser;
+
+mod thread_utils;
+use thread_utils::with_rng;

@@ -1,4 +1,5 @@
 use crate::models::Card;
+use lazy_static::lazy_static;
 
 pub struct Deck {
     pub cards: Vec<Card>,
@@ -16,4 +17,10 @@ impl Deck {
             cards,
         }
     }
+}
+
+lazy_static! {
+    pub static ref DECK: Deck = {
+        Deck::new()
+    };
 }

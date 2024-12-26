@@ -161,7 +161,6 @@ impl<'a> Iterator for ActionHistoryByteStreamIterator<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::Card;
     use super::*;
     use rstest::rstest;
 

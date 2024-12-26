@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use crate::models::Deck;
 use crate::*;
 use evaluate::evaluate_hand::hand_to_unique_prime_product;
 use itertools::Itertools;
@@ -9,9 +8,7 @@ use crate::evaluate::evaluate_hand::{REMAINING_LOOKUP_PRODUCT};
 use super::remaining_hand_types::{classify_hand_type, evaluate_pair, evaluate_two_pair, evaluate_three_of_a_kind, evaluate_full_house, evaluate_four_of_a_kind, HandType};
 
 fn generate_all_hand_combos(num_cards: usize) -> Vec<Vec<Card>> {
-    let deck = Deck::new();
-
-    let combos = deck.cards.iter().combinations(num_cards).map(|combo| combo.into_iter().cloned().collect()).collect::<Vec<Vec<Card>>>();
+    let combos = (0..52).collect_vec().iter().combinations(num_cards).map(|combo| combo.into_iter().cloned().map(|c| Card::from_int(c)).collect()).collect::<Vec<Vec<Card>>>();
     combos
 }
 

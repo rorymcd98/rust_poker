@@ -1,7 +1,19 @@
-use rand::Rng;
+use itertools::Itertools;
+use lazy_static::lazy_static;
+use rand::seq::SliceRandom;
+use rand::{seq::IteratorRandom, Rng};
+use rand::rngs::SmallRng;
+use std::cell::RefCell;
 use std::hash::{Hash, Hasher};
+use std::vec;
+use crate::thread_utils::with_rng;
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+use rand::SeedableRng;
+
+// 2 for traverser, 2 for opponent, 5 for board
+pub type NineCardDeal = [Card; 9];
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Suit {
     Spades,
     Hearts,
@@ -30,8 +42,7 @@ impl Suit {
     }
 
     pub fn random() -> Suit {
-        let mut rng = rand::thread_rng();
-        Suit::from_int(rng.gen_range(0..4))
+        with_rng(|rng| Suit::from_int(rng.gen_range(0..4)))
     }
 }
 
@@ -41,7 +52,7 @@ impl Default for Suit {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Rank {
     Two,
     Three,
@@ -115,7 +126,7 @@ impl Rank {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct Card {
     pub suit: Suit,
     pub rank: Rank,
@@ -134,6 +145,16 @@ impl Card {
             rank,
         }
     }
+    
+    pub fn from_int(card_number: u8) -> Card {
+        let suit = card_number / 13;
+        let rank = card_number % 13;
+        Card::new(Suit::from_int(suit), Rank::from_int(rank))
+    }
+
+    pub fn to_int(&self) -> u8 {
+        self.suit.to_int() * 13 + self.rank.to_int()
+    }
 
     pub fn from_ints(suit: u8, rank: u8) -> Card {
         Card {
@@ -143,47 +164,106 @@ impl Card {
     }
 
     fn new_random_card() -> Card {
-        let mut rng = rand::thread_rng();
-        let card = rng.gen_range(0..52);
-
-        let suit = card / 13;
-        let rank = card % 13;
-        Card::new(Suit::from_int(suit), Rank::from_int(rank))
+        let card_int = with_rng(|rng| rng.gen_range(0..52));
+        Card::from_int(card_int)
     }
 
-    pub fn new_random_cards(num_cards: usize) -> Vec::<Card> {
-        let mut existing_cards = Vec::new();
-        while existing_cards.len() < num_cards {
-            let new_card = Card::new_random_card();
-            if !existing_cards.contains(&new_card) {
-                existing_cards.push(new_card);
+    pub fn new_random_cards(num_cards: usize) -> Vec<Card> {
+        let mut taken = [false; 52];
+        let mut res = Vec::with_capacity(num_cards);
+        with_rng(|rng|
+            while res.len() < num_cards {
+                let card_int = rng.gen::<u8>() % 52;
+                if taken[card_int as usize] {
+                    continue;
+                }
+                taken[card_int as usize] = true;
+                res.push(Card::from_int(card_int));
             }
-        }
-        existing_cards
+        );
+        res
     }
 
-    pub fn get_one_more_card(existing_cards: &Vec<Card>) -> Card {
-        loop {
-            let new_card = Card::new_random_card();
-            if !existing_cards.contains(&new_card) {
-                return new_card;
+    pub fn new_random_9_card_game_with(card1: Card, card2: Card) -> NineCardDeal {
+        let mut taken = [false; 52];
+        let mut res = [Card::default(); 9];
+        taken[card1.to_int() as usize] = true;
+        taken[card2.to_int() as usize] = true;
+        res[0] = card1;
+        res[1] = card2;
+        let mut count = 2;
+        with_rng(|rng|
+            while count < 9 {
+                let card_int = rng.gen::<u8>() % 52;
+                if taken[card_int as usize] {
+                    continue;
+                }
+                taken[card_int as usize] = true;
+                res[count] = Card::from_int(card_int);
+                count += 1;
             }
-        }
+        );
+        res
+    }
+
+    pub fn new_random_9_card_game() -> NineCardDeal {
+        let mut taken = [false; 52];
+        let mut res = [Card::default(); 9];
+        let mut count = 0;
+        with_rng(|rng|
+            while count < 9 {
+                let card_int = rng.gen::<u8>() % 52;
+                if taken[card_int as usize] {
+                    continue;
+                }
+                taken[card_int as usize] = true;
+                res[count] = Card::from_int(card_int);
+                count += 1;
+            }
+        );
+        res
+    }
+
+    fn serialise_int(card_int: u8) -> u8 {
+        let suit = card_int / 13;
+        let rank = card_int % 13;
+        (suit << 4) | rank
     }
 
     pub fn get_n_more_cards(existing_cards: &Vec<Card>, n: usize) -> Vec<Card> {
-        if n + existing_cards.len() > 52 {
-            panic!("Cannot get more than 52 cards");
+        let mut taken = [false; 52];
+        for card in existing_cards {
+            taken[card.to_int() as usize] = true;
         }
-
-        let mut new_cards = Vec::new();
-        while new_cards.len() < n {
-            let new_card = Card::new_random_card();
-            if !existing_cards.contains(&new_card) && !new_cards.contains(&new_card) {
-                new_cards.push(new_card);
+        let mut res = Vec::with_capacity(n);
+        with_rng(|rng|
+            while res.len() < n {
+                let card_int = (rng.gen::<u8>() % 52) as usize;
+                if taken[card_int] {
+                    continue;
+                }
+                taken[card_int] = true;
+                res.push(Card::from_int(card_int as u8));
             }
+        );
+        res
+    }
+
+    pub fn get_one_more_card(existing_cards: &Vec<Card>) -> Card {
+        let mut taken = [false; 52];
+        for card in existing_cards {
+            taken[card.to_int() as usize] = true;
         }
-        new_cards
+        with_rng(|rng|
+            loop {
+                let card_int = (rng.gen::<u8>() % 52) as usize;
+                if taken[card_int] {
+                    continue;
+                }
+                taken[card_int] = true;
+                return Card::from_int(card_int as u8);
+            }
+        )
     }
 
     pub fn serialise(&self) -> u8 {
@@ -271,6 +351,7 @@ impl Ord for Card {
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
+    use std::{collections::{HashMap, HashSet}, time::Instant};
     use super::*;
 
     #[test]
@@ -311,6 +392,17 @@ mod tests {
     }
 
     #[test]
+    fn deck_to_int_roudtrip() {
+        let mut seen = HashSet::new();
+        for i in 0..52 {
+            let card = Card::from_int(i);
+            assert!(!seen.contains(&card));
+            seen.insert(card.clone());
+            assert_eq!(card.to_int(), i);
+        }
+    }
+
+    #[test]
     fn test_card_new() {
         let card = Card::new(Suit::Spades, Rank::Ace);
         assert_eq!(card.suit, Suit::Spades);
@@ -336,13 +428,14 @@ mod tests {
     }
 
     #[test]
-    fn test_new_random_cards() {
-        let cards = Card::new_random_cards(5);
-        assert_eq!(cards.len(), 5);
-        // Check that all cards are unique
-        for i in 0..5 {
-            for j in i+1..5 {
-                assert_ne!(cards[i], cards[j]);
+    fn test_new_random_9_card() {
+        for _ in 0..10000 {
+            let cards = Card::new_random_9_card_game();
+            assert_eq!(cards.len(), 5);
+            let mut seen = HashSet::new();
+            for card in cards {
+                assert!(!seen.contains(&card));
+                seen.insert(card);
             }
         }
     }
@@ -354,6 +447,26 @@ mod tests {
         assert_eq!(new_cards.len(), 4);
         for card in new_cards {
             assert!(!existing_cards.contains(&card));
+        }
+    }
+
+    #[test]
+    fn test_9_random_card_game_with_performance() {
+        let start = Instant::now();
+        let existing_cards = Card::new_random_cards(2);
+        for _ in 0..100_000 {
+            _ = Card::new_random_9_card_game_with(existing_cards[0], existing_cards[1]);
+        }
+        let duration = start.elapsed();
+        assert!(duration.as_millis() < 500, "Performance test failed: took too long to generate cards");
+    }
+
+    #[test]
+    fn test_get_one_more_card() {
+        for _ in 0..10000 {
+            let existing_cards = Card::new_random_cards(5);
+            let new_card = Card::get_one_more_card(&existing_cards);
+            assert!(!existing_cards.contains(&new_card));
         }
     }
 }

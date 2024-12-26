@@ -1,5 +1,6 @@
 mod models;
 mod traversal;
+mod thread_utils;
 
 use crate::traversal::main_traverse::TreeTraverser;
 
