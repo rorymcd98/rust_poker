@@ -1,4 +1,4 @@
-use crate::{models::card::Rank, Card};
+use crate::{models::card::Rank, models::Card};
 use itertools::Itertools;
 
 /// Hand evaluation for cards which aren't flushes, straights, or high cards
@@ -67,7 +67,7 @@ pub fn classify_hand_type (hand: &Vec<Card>) -> HandType {
 #[cfg(test)]
 mod classify_hands_tests {
     use super::*;
-    use crate::*;
+    use crate::models::card::{Card, Rank, Suit};
 
     #[test]
     fn test_pair() {

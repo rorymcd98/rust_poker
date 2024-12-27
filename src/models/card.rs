@@ -1,7 +1,6 @@
 use rand::Rng;
-use std::hash::{Hash, Hasher};
+use std::{fmt::{Display, Formatter}, hash::{Hash, Hasher}};
 use crate::thread_utils::with_rng;
-
 
 // 2 for traverser, 2 for opponent, 5 for board
 pub type NineCardDeal = [Card; 9];
@@ -12,6 +11,17 @@ pub enum Suit {
     Hearts,
     Diamonds,
     Clubs,   
+}
+
+impl Display for Suit {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", match self {
+            Suit::Spades => "s",
+            Suit::Hearts => "h",
+            Suit::Diamonds => "d",
+            Suit::Clubs => "c",
+        })
+    }
 }
 
 impl Suit {
@@ -60,6 +70,26 @@ pub enum Rank {
     Queen,
     King,
     Ace,
+}
+
+impl Display for Rank {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", match self {
+            Rank::Two => "2",
+            Rank::Three => "3",
+            Rank::Four => "4",
+            Rank::Five => "5",
+            Rank::Six => "6",
+            Rank::Seven => "7",
+            Rank::Eight => "8",
+            Rank::Nine => "9",
+            Rank::Ten => "T",
+            Rank::Jack => "J",
+            Rank::Queen => "Q",
+            Rank::King => "K",
+            Rank::Ace => "A",
+        })
+    }
 }
 
 impl Rank {
@@ -123,6 +153,12 @@ impl Rank {
 pub struct Card {
     pub suit: Suit,
     pub rank: Rank,
+}
+
+impl Display for Card {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}{}", self.rank, self.suit)
+    }
 }
 
 impl Hash for Card {
@@ -422,7 +458,7 @@ mod tests {
 
     #[test]
     fn test_new_random_9_card() {
-        for _ in 0..10000 {
+        for _ in 0..10_000 {
             let cards = Card::new_random_9_card_game();
             assert_eq!(cards.len(), 9);
             let mut seen = HashSet::new();
@@ -432,6 +468,22 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn test_new_random_9_card_with_predicate() {
+        let card1 = Card::new(Suit::Spades, Rank::Two);
+        let card2 = Card::new(Suit::Hearts, Rank::Three);
+        for _ in 0..10_000 {
+            let cards = Card::new_random_9_card_game_with(card1, card2);
+            assert_eq!(cards.len(), 9);
+            let mut seen = HashSet::new();
+            for card in cards {
+                assert!(!seen.contains(&card));
+                seen.insert(card);
+            }
+        }
+    }
+
 
     #[test]
     fn test_get_n_more_cards() {

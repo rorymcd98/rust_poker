@@ -7,12 +7,21 @@ use crate::models::Card;
 use crate::models::Suit;
 use crate::models::Player;
 use crate::traversal::action::Action;
+use super::action_history::validate_history;
+use super::strategy::strategy_branch::InfoNode;
 use super::strategy::{strategy_map::StrategyMap, strategy_branch::StrategyBranch};
 use super::action_history::ActionHistory;
 use std::cell::{Cell, RefCell};
 
 lazy_static! {
     static ref EVALUATOR: EvaluateHand = EvaluateHand::new();
+}
+
+enum TerminalState {
+    Showdown,
+    Fold,
+    RoundOver,
+    None,
 }
 
 struct GameStateHelper {
@@ -26,15 +35,17 @@ struct GameStateHelper {
     bets_this_round: Cell<u8>,
 }
 
+
+
 impl GameStateHelper {
-    pub fn new(action_history: ActionHistory, nine_card_deal: NineCardDeal, current_turn: Player, small_blind_player: Player) -> GameStateHelper {
+    pub fn new(action_history: ActionHistory, nine_card_deal: NineCardDeal, small_blind_player: Player) -> GameStateHelper {
         GameStateHelper {
             action_history: RefCell::new(action_history),
             traverser_pot: Cell::new(0),
             opponent_pot: Cell::new(0),
             cards: nine_card_deal,
             cards_dealt: Cell::new(0),
-            current_player: Cell::new(current_turn),
+            current_player: Cell::new(small_blind_player),
             small_blind_player,
             bets_this_round: Cell::new(0),
         }
@@ -68,44 +79,67 @@ impl GameStateHelper {
         self.cards[8]
     }
 
+    pub fn is_preflop(&self) -> bool {
+        self.cards_dealt.get() == 0
+    }
+
+    pub fn is_river(&self) -> bool {
+        self.cards_dealt.get() == 5
+    }
+
     pub fn get_num_available_actions(&self) -> usize {
         match self.bets_this_round.get() {
+            0 => 2,
             4 => 2,
             _ => 3,
         }
     }
 
-    pub fn is_round_over(&self) -> bool {
-        let action_history = &self.action_history.borrow().history;
-        let last_two_actions = &action_history[action_history.len() - 2..];
-        match last_two_actions {
-            [Action::CheckFold, Action::CheckFold] => true,
-            [Action::Call, Action::CheckFold] => true,
-            [Action::Bet, Action::CheckFold] => true,
-            [Action::Call, Action::Call] => panic!("Invalid state - should not have two calls in a row"), 
-            [Action::Bet, Action::Call] => true,
-            _ => false,
-        }
+    pub fn serialise_history_with_current_player(&self) -> InfoNode {
+        let current_player_hole_cards = match self.current_player.get() {
+            Player::Traverser => [self.cards[0], self.cards[1]],
+            Player::Opponent => [self.cards[2], self.cards[3]],
+        };
+        // TODO - test the performance of keeping the Deal(cards) in the struct ?
+        self.action_history.borrow_mut().set_hole_cards(Action::Deal(current_player_hole_cards[0]), Action::Deal(current_player_hole_cards[1]));
+        self.action_history.borrow().serialise()
     }
 
-    pub fn is_terminal_state(&self) -> bool {
+    pub fn check_round_terminal(&self) -> TerminalState {
         let action_history = &self.action_history.borrow().history;
         let last_two_actions = &action_history[action_history.len() - 2..];
-        // TODO - handle the preflop edge case
-        let is_river = self.cards_dealt.get() == 5;
-        is_river || match last_two_actions {
-            [Action::Bet, Action::CheckFold] => true,
-            _ => false,
-        }
-    }
+        let terminal_state = match last_two_actions {
+            [Action::CheckFold, Action::CheckFold] => TerminalState::Showdown,
+            [Action::Call, Action::CheckFold] => TerminalState::RoundOver,
+            [Action::Bet, Action::CheckFold] => TerminalState::Fold,
+            [Action::Call, Action::Call] => panic!("Invalid state - should not have two calls in a row {:?}", &self.action_history.borrow().history), 
+            [Action::Bet, Action::Call] => TerminalState::Showdown,
+            _ => TerminalState::None,
+        };
 
-    fn evaluate_terminal_state(&self) -> f64 {
-        0.0
+        if self.is_river() {
+            match terminal_state {
+                TerminalState::None => return TerminalState::None,
+                TerminalState::RoundOver => panic!("Invalid state - should not have a round over state on the river {:?}", &self.action_history.borrow().history),
+                _ => return terminal_state,
+            }
+        } else {
+            match terminal_state {
+                TerminalState::Fold => return TerminalState::Fold,
+                TerminalState::None => return TerminalState::None,
+                _ => return TerminalState::RoundOver,
+            }
+        }
     }
 
     fn evaluate_showdown(&self) -> f64 {
-        let a = EVALUATOR.evaluate_deal(self.cards);
-        0.0
+        validate_history(&self.action_history.borrow().history);
+        let winner = EVALUATOR.evaluate_deal(self.cards);
+        match winner {
+            Some(Player::Traverser) => -(self.traverser_pot.get() as f64),
+            Some(Player::Opponent) => self.opponent_pot.get() as f64,
+            None => 0.0,
+        }
     }
 
     fn evaluate_terminal_fold(&self) -> f64 {
@@ -116,29 +150,28 @@ impl GameStateHelper {
     }
 
     pub fn bet(&self) {
+        self.bets_this_round.set(self.bets_this_round.get() + 1);
         self.action_history.borrow_mut().history.push(Action::Bet);
         match self.current_player.get() {
             Player::Traverser => {
                 self.traverser_pot.set(self.traverser_pot.get() + 2);
-                self.bets_this_round.set(self.bets_this_round.get() + 1);
             },
             Player::Opponent => {
                 self.opponent_pot.set(self.opponent_pot.get() + 2);
-                self.bets_this_round.set(self.bets_this_round.get() + 1);
             },
         }
     }
 
     pub fn unbet(&self) {
+        //println!("Bets this round {}", self.bets_this_round.get());
+        self.bets_this_round.set(self.bets_this_round.get() - 1);
         self.action_history.borrow_mut().history.pop();
         match self.current_player.get() {
             Player::Traverser => {
                 self.traverser_pot.set(self.traverser_pot.get() - 2);
-                self.bets_this_round.set(self.bets_this_round.get() - 1);
             },
             Player::Opponent => {
                 self.opponent_pot.set(self.opponent_pot.get() - 2);
-                self.bets_this_round.set(self.bets_this_round.get() - 1);
             },
         };
     }
@@ -147,6 +180,20 @@ impl GameStateHelper {
         match self.current_player.get() {
             Player::Traverser => self.traverser_pot.get(),
             Player::Opponent => self.opponent_pot.get(),
+        }
+    }
+
+    fn call_or_bet(&self) {
+        match self.bets_this_round.get() {
+            0 => self.bet(),
+            _ => self.call(),
+        }
+    }
+
+    fn uncall_or_unbet(&self, previous_pot: u8, previous_bets: u8) {
+        match previous_bets {
+            0 => self.unbet(),
+            _ => self.uncall(previous_pot),
         }
     }
 
@@ -181,6 +228,57 @@ impl GameStateHelper {
     pub fn uncheckfold(&self) {
         self.action_history.borrow_mut().history.pop();
     }
+
+    // implement deal and undeal
+    pub fn deal(&self) {
+        // {
+        //     let action_history = &self.action_history.borrow().history;
+        //     let last_two_actions = &action_history[action_history.len() - 2..];
+        //     match last_two_actions {
+        //         [Action::Bet, Action::CheckFold] => panic!("Invalid state - should not have a bet followed by a checkfold, then a deal {:?}", &self.action_history.borrow().history),
+        //         _ => TerminalState::None,
+        //     };
+        // }
+        let card = self.cards[self.cards_dealt.get() as usize];
+        self.action_history.borrow_mut().history.push(Action::Deal(card));
+        self.cards_dealt.set(self.cards_dealt.get() + 1);
+        self.bets_this_round.set(0);
+        self.set_current_player_to_big_blind();
+    }
+
+    pub fn undeal(&self, previous_bets: u8, previous_player: Player) {
+        self.action_history.borrow_mut().history.pop();
+        self.cards_dealt.set(self.cards_dealt.get() - 1);
+        self.bets_this_round.set(previous_bets);
+        self.current_player.set(previous_player);
+    }
+
+    pub fn deal_flop(&self) {
+        // {
+        //     let action_history = &self.action_history.borrow().history;
+        //     let last_two_actions = &action_history[action_history.len() - 2..];
+        //     match last_two_actions {
+        //         [Action::Bet, Action::CheckFold] => panic!("Invalid state - should not have a bet followed by a checkfold, then a deal {:?}", &self.action_history.borrow().history),
+        //         _ => TerminalState::None,
+        //     };
+        // }
+        let flop = self.get_flop();
+        for card in flop {
+            self.action_history.borrow_mut().history.push(Action::Deal(card));
+        }
+        self.cards_dealt.set( 3);
+        self.bets_this_round.set(0);
+        self.set_current_player_to_big_blind();
+    }
+
+    pub fn undeal_flop(&self, previous_bets: u8, previous_player: Player) {
+        for _ in 0..3 {
+            self.action_history.borrow_mut().history.pop();
+        }
+        self.cards_dealt.set(0);
+        self.bets_this_round.set(previous_bets);
+        self.current_player.set(previous_player);
+    }
 }
 
 pub struct TreeTraverser {
@@ -196,27 +294,32 @@ impl TreeTraverser {
         }
     }
 
-    pub fn BeginTreeTraversal(self){
+    pub fn begin_tree_traversal(self){
         let players = vec![Player::Traverser, Player::Opponent];
     
         for player in players { // Alternate between who is small blind
-            let action_history = &mut ActionHistory::new(player.clone(), vec![]);
-            for card_combo in Card::all_suited_combos(Suit::Spades) {
-                let card_combo_print = card_combo.clone();
-                // This defines our branch - our hole cards and whether we're the traverser
-                let traverser_cards = [card_combo.0, card_combo.1];
-                let strategy_branch = StrategyBranch::new();
-                
-                action_history.history.push(Action::Deal(traverser_cards[0].clone()));
-                action_history.history.push(Action::Deal(traverser_cards[1].clone()));
-
-                let deal = Card::new_random_9_card_game_with(traverser_cards[0], traverser_cards[1]);
-
-                let game_state = GameStateHelper::new(action_history.clone(), deal, player.clone(), player.clone());
-                
-                let mut branch_traverser = BranchTraverser::new(strategy_branch, game_state);
-                let utility = branch_traverser.begin_traversal();
-                println!("Utility of card {:?}: {}", card_combo_print, utility);
+            let action_history = &mut ActionHistory::new(vec![]);
+            for card_combo in Card::all_suited_combos(Suit::Spades).take(1) {
+                for iteration in 0..1_000 {
+                    // println!("Iteration: {}", iteration);
+                    let card_combo_print = card_combo.clone();
+                    // This defines our branch - our hole cards and whether we're the traverser
+                    let traverser_cards = [card_combo.0, card_combo.1];
+                    let strategy_branch = StrategyBranch::new();
+                    
+                    action_history.history.push(Action::Deal(traverser_cards[0].clone()));
+                    action_history.history.push(Action::Deal(traverser_cards[1].clone()));
+    
+                    let deal = Card::new_random_9_card_game_with(traverser_cards[0], traverser_cards[1]);
+    
+                    let game_state = GameStateHelper::new(action_history.clone(), deal, player.clone());
+                    let branch = strategy_branch;
+                    let strategy_branch = RefCell::new(branch);
+                    let mut branch_traverser = BranchTraverser::new(strategy_branch, game_state, iteration);
+    
+                    let utility = branch_traverser.begin_traversal();
+                    // println!("Utility of card {:?}: {}", card_combo_print, utility);
+                }
             }
         }
     }
@@ -224,61 +327,68 @@ impl TreeTraverser {
 
 struct BranchTraverser {
     strategy_branch: RefCell::<StrategyBranch>,
-    iteration: Cell::<usize>,
+    iteration: usize,
     game_state: GameStateHelper,
 }
 
 impl BranchTraverser {
-    pub fn new(strategy_branch: StrategyBranch, game_state: GameStateHelper) -> BranchTraverser {
+    pub fn new(strategy_branch: RefCell<StrategyBranch>, game_state: GameStateHelper, iteration: usize) -> BranchTraverser {
         BranchTraverser {
-            strategy_branch: RefCell::new(strategy_branch),
-            iteration: Cell::new(1),
+            strategy_branch: strategy_branch,
+            iteration,
             game_state,
         }
     }
 
     pub fn begin_traversal(&mut self) -> f64 {        
+        self.game_state.set_current_player_to_small_blind();
         let utility = self.traverse_action();
         utility
     }
 
     fn traverse_action(&self) -> f64 {
-        if self.game_state.is_round_over(){
-            if self.game_state.is_terminal_state(){
-                return self.game_state.evaluate_terminal_state();
+        match self.game_state.check_round_terminal() {
+            TerminalState::Showdown => return self.game_state.evaluate_showdown(),
+            TerminalState::Fold => return self.game_state.evaluate_terminal_fold(),
+            TerminalState::RoundOver => {
+                if self.game_state.is_preflop() {
+                    return self.traverse_flop();
+                }
+                return self.traverse_deal();
             }
-            self.game_state.set_current_player_to_small_blind();
-            return self.traverse_deal();
+            TerminalState::None => (),
         }
 
-        self.game_state.action_history.borrow_mut().current_player = self.game_state.get_current_player();
-    
-        // Isolate the mutable borrow of `strategy_branch`
-        let strategy_key = self.game_state.action_history.borrow().serialise();
+        let info_node_key = self.game_state.serialise_history_with_current_player();
         let num_available_actions = self.game_state.get_num_available_actions() as usize;
-        let mut strategy_branch = self.strategy_branch.borrow_mut();
-        let strategy = strategy_branch.get_or_create_strategy(strategy_key, num_available_actions);
-        
+        let strategy = {
+            let mut strategy_branch = self.strategy_branch.borrow_mut();
+            strategy_branch.get_or_create_strategy(info_node_key.clone(), num_available_actions).clone()
+        };
+        let strategy_before = strategy.clone();
+
+        let pot_before_action = self.game_state.get_current_player_pot();
+        let bets_before_action = self.game_state.bets_this_round.get();
+        let previous_player = self.game_state.current_player.get();
+
         if self.game_state.current_player.get().is_opponent() {
             let sampled_action = strategy.sample_strategy();
 
-            let pot_before_action = self.game_state.get_current_player_pot();
             match sampled_action {
-                0 => self.game_state.bet(),
-                1 => self.game_state.call(),
-                2 => self.game_state.checkfold(),
+                0 => self.game_state.checkfold(),
+                1 => self.game_state.call_or_bet(),
+                2 => self.game_state.bet(),
                 _ => panic!("Invalid action"),
             };
-            let previous_player = self.game_state.current_player.get();
-            self.game_state.switch_current_player();
 
+            self.game_state.switch_current_player();
             // Propagate up the randomly selected action multiplied by the chance of selecting it
             let utility = self.traverse_action();
 
             match sampled_action {
-                0 => self.game_state.unbet(),
-                1 => self.game_state.uncall(pot_before_action),
-                2 => self.game_state.uncheckfold(),
+                0 => self.game_state.uncheckfold(),
+                1 => self.game_state.uncall_or_unbet(pot_before_action, bets_before_action),
+                2 => self.game_state.unbet(),
                 _ => panic!("Invalid action"),
             };
 
@@ -290,21 +400,20 @@ impl BranchTraverser {
             let mut utilities = vec![0.0; num_available_actions];
 
             for action in 0..num_available_actions {
-                let previous_player = self.game_state.current_player.get();
                 let pot_before_action = self.game_state.get_current_player_pot();
                 match action {
-                    0 => self.game_state.bet(),
-                    1 => self.game_state.call(),
-                    2 => self.game_state.checkfold(),
+                    0 => self.game_state.checkfold(),
+                    1 => self.game_state.call_or_bet(),
+                    2 => self.game_state.bet(),
                     _ => panic!("Invalid action"),
                 };
-
+                self.game_state.switch_current_player();
                 utilities[action] = self.traverse_action() * strategy.current_strategy[action];
 
                 match action {
-                    0 => self.game_state.unbet(),
-                    1 => self.game_state.uncall(pot_before_action),
-                    2 => self.game_state.checkfold(),
+                    0 => self.game_state.uncheckfold(),
+                    1 => self.game_state.uncall_or_unbet(pot_before_action, bets_before_action),
+                    2 => self.game_state.unbet(),
                     _ => panic!("Invalid action"),
                 };
     
@@ -314,37 +423,43 @@ impl BranchTraverser {
             for action in 0..num_available_actions {
                 utility += utilities[action];
             }
-
-            strategy.update_strategy(utility, utilities, self.iteration.get());
-
+            // //println!("utilities length {:?}", utilities.len());
+            // //println!("available actions: {:?}", num_available_actions);
+            // //println!("bets this round {:?}", self.game_state.bets_this_round.get());
+            
+            assert_eq!(info_node_key, self.game_state.serialise_history_with_current_player());
+            assert_eq!(strategy_before.actions, utilities.len(), "action history {:?}", self.game_state.action_history.borrow().history);
+            strategy.clone().update_strategy(utility, utilities, self.iteration);
             utility
         }
     }
     
 
     fn traverse_flop(&self) -> f64 {
-        let mut flop_cards = self.game_state.get_flop();
-        flop_cards.sort();
-        self.game_state.cards_dealt.set(self.game_state.cards_dealt.get() + 3);
-        for card in flop_cards {
-            self.game_state.action_history.borrow_mut().history.push(Action::Deal(card));
+        //println!("Dealing flop");
+        if self.game_state.action_history.borrow().history.last().unwrap().is_deal() {
+            panic!("Invalid state - should not have a deal followed by a deal {:?}", &self.game_state.action_history.borrow().history);
         }
-        self.game_state.set_current_player_to_big_blind();
+        let previous_player = self.game_state.current_player.get();
+        let previous_bets = self.game_state.bets_this_round.get();
+        let actions_before = self.game_state.action_history.borrow().history.len();
+        self.game_state.deal_flop();
         let utility = self.traverse_action();
-        for _ in 0..3 {
-            self.game_state.action_history.borrow_mut().history.pop();
-        }
-        self.game_state.cards_dealt.set(self.game_state.cards_dealt.get() - 3);
+        self.game_state.undeal_flop(previous_bets, previous_player);
+        assert_eq!(actions_before, self.game_state.action_history.borrow().history.len());
         utility
     }
 
     fn traverse_deal(&self) -> f64 {
-        let card = self.game_state.cards[self.game_state.cards_dealt.get() as usize];
-        self.game_state.action_history.borrow_mut().history.push(Action::Deal(card));
-        self.game_state.cards_dealt.set(self.game_state.cards_dealt.get() + 1);
+        //println!("Dealing");
+        if self.game_state.action_history.borrow().history.last().unwrap().is_deal() {
+            panic!("Invalid state - should not have a deal followed by a deal {:?}", &self.game_state.action_history.borrow().history);
+        }
+        let previous_player = self.game_state.current_player.get();
+        let previous_bets = self.game_state.bets_this_round.get();
+        self.game_state.deal();
         let utility = self.traverse_action();
-        self.game_state.action_history.borrow_mut().history.pop();
-        self.game_state.cards_dealt.set(self.game_state.cards_dealt.get() - 1);
+        self.game_state.undeal(previous_bets, previous_player);
         utility
     }
 }

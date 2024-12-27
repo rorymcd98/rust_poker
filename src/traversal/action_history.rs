@@ -1,19 +1,138 @@
+use core::panic;
+
+use itertools::Itertools;
+
 use crate::traversal::action::Action;
-use crate::models::player::Player;
+
+pub fn validate_history(history: &Vec<Action>) {
+    let mut seen = vec![];
+
+    match history[0] {
+        Action::Deal(card) => {
+            seen.push(card);
+        },
+        _ => panic!("First action should be a deal: {:?}", history),
+    }
+    match history[1] {
+        Action::Deal(card) => {
+            seen.push(card);
+        },
+        _ => panic!("Second action should be a deal: {:?}", history),
+    }
+
+    let mut first_call_or_bet = true;
+
+    let mut prev = history[1].clone();
+    let mut prev_prev = history[0].clone();
+    let mut deal_count = 0;
+    let mut bets_this_turn = 0;
+
+    fn is_round_over(prev_prev: &Action, prev: &Action) -> bool {
+        match [prev_prev, prev] {
+            [Action::CheckFold, Action::CheckFold] => true,
+            [Action::Bet, Action::Call] => true,
+            [Action::Call, Action::CheckFold] => true,
+            _ => false,
+        }
+    }
+
+    for action in &history[2..] {
+        match action {
+            Action::Deal(card) => {
+                bets_this_turn = 0;
+                seen.push(card.clone());
+                deal_count += 1;
+                if prev_prev.is_bet() && prev.is_checkfold() {
+                    panic!("Shouldn't be dealing, opponent just folded: {:?}", history);
+                }
+                if (deal_count == 1 || deal_count > 3) && !is_round_over(&prev_prev, &prev) {
+                    panic!("Shouldn't be dealing, round wasn't over ({:?}, {:?}) : {:?}", prev_prev, prev, history);
+                }
+                match deal_count {
+                    1 => {
+                        if prev.is_deal() {
+                            panic!("No actions occurred preflop: {:?}", history);
+                        }
+                    },
+                    2 => {
+                        if !prev.is_deal() {
+                            panic!("Only 1 flop card dealt: {:?}", history);
+                        }
+                    },
+                    3 => {
+                        if !prev.is_deal() {
+                            panic!("Only 2 flop card dealt: {:?}", history);
+                        }
+                    },
+                    4 => {
+                        if prev.is_deal() {
+                            panic!("No action occured on the flop: {:?}", history);
+                        }
+                    },
+                    5 => {
+                        if prev.is_deal() {
+                            panic!("No actions occurred on the turn: {:?}", history);
+                        }
+                    },
+                    _ => panic!("Too many deals: {:?}", history),
+                }
+                if deal_count > 5 {
+                    panic!("Too many deals: {:?}", history);
+                }
+            },
+            Action::CheckFold => {
+                if bets_this_turn > 0 && prev.is_checkfold() {
+                    panic!("Double checkfold after bet: {:?}", history);
+                }
+            },
+            Action::Call => {
+                if prev.is_checkfold() && !first_call_or_bet {
+                    panic!("Call after the preflop edge: {:?}", history);
+                }
+                first_call_or_bet = false;
+                if prev.is_call() {
+                    panic!("Double call: {:?}", history);
+                }
+            },
+            Action::Bet => {
+                first_call_or_bet = false;
+                bets_this_turn += 1;
+                if bets_this_turn > 4 {
+                    panic!("Too many bets this turn: {:?}", history);
+                }
+            },
+        }
+        prev_prev = prev.clone();
+        prev = action.clone();
+    }
+    let seen_len = seen.len();
+    let unique_seen_len = seen.iter().unique().collect::<Vec<_>>().len();
+    if seen_len != unique_seen_len {
+        while seen.len() > 0 {
+            let cand = seen.pop();
+            if seen.contains(&cand.unwrap()) {
+                panic!("Duplicate card ({}) in history: {:?}", cand.unwrap(), history);
+            }
+        }
+    }
+}
 
 // A live record of the game state that also acts as a key to the various strategies
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ActionHistory {
-    pub current_player: Player,
     pub history: Vec::<Action>, // TODO - Try to make this a mutable reference
 }
 
 impl ActionHistory {
-    pub fn new(current_player: Player, history: Vec<Action>) -> ActionHistory {
+    pub fn new(history: Vec<Action>) -> ActionHistory {
         ActionHistory {
-            current_player: current_player,
-            history: history,
+            history,
         }
+    }
+
+    pub fn set_hole_cards(&mut self, hole_card_one: Action, hole_card_two: Action) {
+        self.history[0] = hole_card_one;
+        self.history[1] = hole_card_two;
     }
 
     /// Serialisation
@@ -23,7 +142,6 @@ impl ActionHistory {
         let is_special = self.history.len() == 3 && self.history[2].is_call(); // In the case of a preflop bb call
 
         let mut serialised_history = Vec::new();
-        serialised_history.push(self.current_player.serialise());
 
         for action in &*self.history {
             serialised_history.push(action.serialise());
@@ -90,13 +208,7 @@ impl<'a> Iterator for ActionHistoryByteStreamIterator<'a> {
 
     fn next(&mut self) -> Option<ActionHistory> {
         let mut history = Vec::<Action>::new();
-        let current_player_byte = self.byte_stream_iterator.next();
-        if current_player_byte.is_none() {
-            return None;
-        }
-        
-        let current_player = Player::deserialise(current_player_byte.unwrap());
-    
+
         // Hole cards
         let hole_card_one = Action::deserialise(self.byte_stream_iterator.next().expect("First hole card failed to be iterated to"));
         let hole_card_two = Action::deserialise(self.byte_stream_iterator.next().expect("Second hole card failed to be iterated to"));
@@ -109,23 +221,23 @@ impl<'a> Iterator for ActionHistoryByteStreamIterator<'a> {
     
         let first_action = Action::deserialise(self.byte_stream_iterator.next().expect("First action failed to be iterated to"));
         if first_action.is_deal() {
-            return Some(ActionHistory::new(current_player, history)); // Return remaining iterator
+            return Some(ActionHistory::new(history)); // Return remaining iterator
         }
         history.push(first_action);
     
         let second_action = Action::deserialise(self.byte_stream_iterator.next().expect("Second action failed to be iterated to"));
         if history.last().unwrap().is_call() && second_action.is_deal() {
-            return Some(ActionHistory::new(current_player, history)); // Return remaining iterator
+            return Some(ActionHistory::new(history)); // Return remaining iterator
         }
         history.push(second_action);
     
         while let Some(byte) = self.byte_stream_iterator.next() {
             let action = Action::deserialise(&byte);
             if Self::is_terminal_serialiastion(&history.last().unwrap(), &action) {
-                return Some(ActionHistory::new(current_player, history));
+                return Some(ActionHistory::new(history));
             } else if action.is_deal() {
                 if Self::is_terminal_serialiastion(&history.last().unwrap(), &action) {
-                    return Some(ActionHistory::new(current_player, history));
+                    return Some(ActionHistory::new(history));
                 }
                 history.push(action);
     
@@ -146,7 +258,7 @@ impl<'a> Iterator for ActionHistoryByteStreamIterator<'a> {
         while let Some(byte) = self.byte_stream_iterator.next() {
             let action = Action::deserialise(byte);
             if Self::is_terminal_serialiastion(history.last().unwrap(), &action) {
-                return Some(ActionHistory::new(current_player, history));
+                return Some(ActionHistory::new(history));
             }
             history.push(action);
         }
@@ -158,11 +270,13 @@ impl<'a> Iterator for ActionHistoryByteStreamIterator<'a> {
 
 #[cfg(test)]
 mod tests {
+    use crate::models::card::{Rank, Suit, Card};
+
     use super::*;
     use rstest::rstest;
 
     fn validate_history(history: Vec<Action>) {
-        let action_history = ActionHistory::new(Player::Opponent, history);
+        let action_history = ActionHistory::new(history);
         let serialised = action_history.serialise();
         let mut action_history_iterator = ActionHistoryByteStreamIterator::new(&serialised);
 
@@ -364,9 +478,9 @@ mod tests {
             Action::Bet,
         ];
 
-        let mut serialised1 = ActionHistory::new(Player::Opponent, history1.clone()).serialise();
-        let serialised2 = ActionHistory::new(Player::Traverser, history2.clone()).serialise();
-        let serialised3 = ActionHistory::new(Player::Opponent, history3.clone()).serialise();
+        let mut serialised1 = ActionHistory::new(history1.clone()).serialise();
+        let serialised2 = ActionHistory::new(history2.clone()).serialise();
+        let serialised3 = ActionHistory::new( history3.clone()).serialise();
 
         serialised1.extend(serialised2);
         serialised1.extend(serialised3);
@@ -375,31 +489,12 @@ mod tests {
         let mut action_history_iterator = ActionHistoryByteStreamIterator::new(&serialised1);
 
         let deserialised_history1 = action_history_iterator.next().unwrap();
-        assert_eq!(deserialised_history1, ActionHistory::new(Player::Opponent, history1));
+        assert_eq!(deserialised_history1, ActionHistory::new(history1));
 
         let deserialised_history2 = action_history_iterator.next().unwrap();
-        assert_eq!(deserialised_history2, ActionHistory::new(Player::Traverser, history2));
+        assert_eq!(deserialised_history2, ActionHistory::new(history2));
 
         let deserialised_history3 = action_history_iterator.next().unwrap();
-        assert_eq!(deserialised_history3, ActionHistory::new(Player::Opponent, history3));
-    }
-
-
-
-    #[rstest]
-    #[case(Player::Traverser)]
-    #[case(Player::Opponent)]
-    fn maintains_player_state(#[case] player: Player) {
-        let history = vec![
-            Action::Deal(Card::new(Suit::Spades, Rank::Three)),
-            Action::Deal(Card::new(Suit::Spades, Rank::Three)),
-        ];
-        let action_history = ActionHistory::new(player.clone(), history.clone());
-        let serialised = action_history.serialise();
-
-        let mut action_history_iterator = ActionHistoryByteStreamIterator::new(&serialised);
-        let deserialised_history = action_history_iterator.next().unwrap();
-        assert_eq!(deserialised_history.current_player, player.clone());
-        assert_ne!(deserialised_history.current_player, player.get_opposite());
+        assert_eq!(deserialised_history3, ActionHistory::new(history3));
     }
 }

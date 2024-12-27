@@ -1,5 +1,11 @@
 
 
+use generate_flush_table::generate_flushes_table;
+use generate_remaining_table::generate_remaining_table;
+use generate_unique_five_table::generate_unique_five_table;
+
+use crate::evaluate::evaluate_hand::{id_mask_to_string, prime_product_to_rank_string, DISTINCT_CARD_COMBOS};
+
 use super::*;
 
 #[test]
@@ -42,7 +48,7 @@ fn test_mutual_exclusivity() {
             panic!("Remaining table has duplicate entries {}, conflicts with rank {}", prime_product_to_rank_string(prime_product), ranking);
         }
         seen_rankings[*ranking as usize] += 1;
-    }
+}
 
     assert_eq!(count, DISTINCT_CARD_COMBOS);
 }

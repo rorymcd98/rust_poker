@@ -1,10 +1,11 @@
 mod models;
 mod traversal;
 mod thread_utils;
+mod evaluate;
 
 use crate::traversal::main_traverse::TreeTraverser;
 
 fn main() {
     let traverser = TreeTraverser::new(1);
-    traverser.BeginTreeTraversal();
+    traverser.begin_tree_traversal();
 }

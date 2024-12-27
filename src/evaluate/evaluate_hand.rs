@@ -1,7 +1,7 @@
 
 use crate::models::card::NineCardDeal;
 use crate::models::Player;
-use crate::Card;
+use crate::models::Card;
 use super::generate_tables::generate_flush_table::generate_flushes_table;
 use super::generate_tables::generate_remaining_table::generate_remaining_table;
 use super::generate_tables::generate_unique_five_table::generate_unique_five_table;

@@ -2,18 +2,19 @@ use rand::Rng;
 
 use crate::traversal::action::{DEFAULT_ACTION_COUNT};
 
-/// Strategy struct to hold the current strategy and the sum of all strategies
-pub struct Strategy {
-    pub current_strategy: Vec<f64>,
-    strategy_sum: Vec<f64>,
-    regrets: Vec<f64>,
-    actions: usize,
-}
-
 /// Constants for the strategy according to the Discounted CFR paper
 const ALPHA: f64 = 1.5;
 const BETA: f64 = 0.0;
 const GAMMA: f64 = 2.0;
+
+/// Strategy struct to hold the current strategy and the sum of all strategies
+#[derive(Clone)]
+pub struct Strategy {
+    pub current_strategy: Vec<f64>,
+    strategy_sum: Vec<f64>,
+    regrets: Vec<f64>,
+    pub actions: usize,
+}
 
 impl Strategy {
     /// Create a new Strategy struct
@@ -23,7 +24,7 @@ impl Strategy {
             current_strategy[i] = 1.0 / actions as f64;
         }
         Strategy {
-            current_strategy: vec![0.0; DEFAULT_ACTION_COUNT],
+            current_strategy: current_strategy.clone(),
             strategy_sum: current_strategy,
             regrets: vec![0.0; DEFAULT_ACTION_COUNT],
             actions: actions,
@@ -42,10 +43,11 @@ impl Strategy {
     // Update the current strategy based on the instantenous regrets
     fn update_current_strategy(&mut self) {
         let mut normalizing_sum = 0.0;
+        //println!("sum of current strategy before update: {}", self.current_strategy.iter().sum::<f64>());
 
         for r in 0..self.actions {
             self.regrets[r] = f64::max(self.regrets[r], 0.0);
-            normalizing_sum += self.current_strategy[r];
+            normalizing_sum += self.regrets[r];
         }
 
         if normalizing_sum > 0.0 {
@@ -58,6 +60,7 @@ impl Strategy {
                 self.current_strategy[a] = 1.0 / self.actions as f64;
             }
         };
+        //println!("sum of current strategy after update: {}", self.current_strategy.iter().sum::<f64>());
     }
 
     /// Updates the current strategy, discounting earlier iterations and favouring later ones
@@ -90,6 +93,8 @@ impl Strategy {
         let mut rng = rand::thread_rng();
         let mut action = 0;
         let mut r = rng.gen_range(0.0..1.0);
+        // print the sum of the current strategy
+        //println!("Sum of current strategy: {}", self.current_strategy.iter().sum::<f64>());
         while r > 0.0 {
             r -= self.current_strategy[action];
             action += 1;

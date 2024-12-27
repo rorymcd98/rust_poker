@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use crate::evaluate::evaluate_hand::hand_to_id;
 use crate::evaluate::evaluate_hand::unique_rank_mask;
 use crate::models::card::Rank;
-use crate::Card;
-use crate::Suit;
+use crate::models::Card;
+use crate::models::Suit;
 use itertools::Itertools;
 use crate::evaluate::evaluate_hand::BIT_REP_LIMIT;
 

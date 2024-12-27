@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::*;
 use evaluate::evaluate_hand::hand_to_unique_prime_product;
 use itertools::Itertools;
-use models::card::Rank;
+use models::card::{Card, Rank};
 use crate::evaluate::evaluate_hand::{REMAINING_LOOKUP_PRODUCT};
 
 use super::remaining_hand_types::{classify_hand_type, evaluate_pair, evaluate_two_pair, evaluate_three_of_a_kind, evaluate_full_house, evaluate_four_of_a_kind, HandType};
@@ -94,8 +94,9 @@ pub fn generate_remaining_table() -> Vec<u16> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use models::card::{Card, Suit};
     use lazy_static::lazy_static;
-    use crate::evaluate::evaluate_hand::{id_mask_to_string, prime_product_to_rank_string, BIT_REP_LIMIT, DISTINCT_CARD_COMBOS};
+    use crate::evaluate::evaluate_hand::{prime_product_to_rank_string, DISTINCT_CARD_COMBOS};
 
     lazy_static! {
         static ref REMAINING_TABLE: Vec<u16> = generate_remaining_table();

@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::models::card::Card;
 
 pub const DEFAULT_ACTION_COUNT: usize = 3;
@@ -8,6 +10,17 @@ pub enum Action {
     Call,
     Bet, // if we want this to become no-limit this can take in a u32
     Deal(Card)
+}
+
+impl Display for Action {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Action::CheckFold => write!(f, "ChF"),
+            Action::Call => write!(f, "Cal"),
+            Action::Bet => write!(f, "Bet"),
+            Action::Deal(card) => write!(f, "D({})", card),
+        }
+    }
 }
 
 impl Action {
@@ -53,6 +66,13 @@ impl Action {
     pub fn is_bet(&self) -> bool {
         match self {
             Action::Bet => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_checkfold(&self) -> bool {
+        match self {
+            Action::CheckFold => true,
             _ => false,
         }
     }

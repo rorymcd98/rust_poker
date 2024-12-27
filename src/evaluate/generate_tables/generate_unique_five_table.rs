@@ -10,9 +10,10 @@ pub fn generate_unique_five_table() -> [u16; BIT_REP_LIMIT + 1] {
 
 #[cfg(test)]
 mod tests {
-    use crate::evaluate::{evaluate_hand::{id_mask_to_string, unique_rank_mask}, generate_tables::generate_flush_table::{NON_STRAIGHT_COUNT, STRAIGHT_COUNT}};
+    use crate::{evaluate::{evaluate_hand::{hand_to_id, id_mask_to_string, unique_rank_mask}, generate_tables::generate_flush_table::{NON_STRAIGHT_COUNT, STRAIGHT_COUNT}}, models::card::Rank, models::card::Card, models::card::Suit};
 
     use super::*;
+    use itertools::Itertools;
     use lazy_static::lazy_static;
 
     lazy_static! {
