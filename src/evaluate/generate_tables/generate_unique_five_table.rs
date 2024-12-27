@@ -1,6 +1,6 @@
 use crate::{Card, Rank, Suit};
-use crate::evaluate::evaluate_hand::{BIT_REP_LIMIT};
-use super::generate_flush_table::{generate_unique_fives, hand_to_id};
+use crate::evaluate::evaluate_hand::{BIT_REP_LIMIT, hand_to_id};
+use super::generate_flush_table::{generate_unique_fives};
 use itertools::Itertools;
 
 /// Generate a lookup table for unique five card hands that aren't flushes
@@ -21,8 +21,8 @@ mod tests {
         static ref FIVE_UNIQUES_MAP: [u16; BIT_REP_LIMIT + 1] = generate_unique_five_table();
     }
 
-    fn evaluate_fives(hand: &Vec<Card>) -> u16 {
-        let hand = hand_to_id(&hand);
+    fn evaluate_fives(hand: &[Card]) -> u16 {
+        let hand = hand_to_id(hand);
         let rank_mask = unique_rank_mask(&hand);
         let evaluation = FIVE_UNIQUES_MAP[rank_mask as usize];
         evaluation

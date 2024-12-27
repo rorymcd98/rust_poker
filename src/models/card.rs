@@ -431,7 +431,7 @@ mod tests {
     fn test_new_random_9_card() {
         for _ in 0..10000 {
             let cards = Card::new_random_9_card_game();
-            assert_eq!(cards.len(), 5);
+            assert_eq!(cards.len(), 9);
             let mut seen = HashSet::new();
             for card in cards {
                 assert!(!seen.contains(&card));

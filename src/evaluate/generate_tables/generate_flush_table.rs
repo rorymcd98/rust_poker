@@ -1,10 +1,11 @@
 use std::collections::HashMap;
-use crate::evaluate::evaluate_hand::unique_rank_mask_vec;
+use crate::evaluate::evaluate_hand::hand_to_id;
+use crate::evaluate::evaluate_hand::unique_rank_mask;
 use crate::Card;
 use crate::Rank;
 use crate::Suit;
 use itertools::Itertools;
-use crate::evaluate::evaluate_hand::{CardId, PRIME_MASK, BIT_REP_LIMIT, card_to_id, unique_rank_mask};
+use crate::evaluate::evaluate_hand::{CardId, PRIME_MASK, BIT_REP_LIMIT, card_to_id};
 
 pub const NON_STRAIGHT_COUNT: usize = 1277; // The number of hands consisting of 5 unique cards which are not straights
 pub const STRAIGHT_COUNT: usize = 10;
@@ -26,6 +27,8 @@ pub fn generate_all_unique_rank_combos(num_cards: usize) -> Vec<Vec<Card>> {
 
 #[cfg(test)]
 mod uniques_generation_test {
+    use crate::evaluate::evaluate_hand::hand_to_id;
+
     use super::*;
 
     #[test]
@@ -40,7 +43,7 @@ mod uniques_generation_test {
         let mut seen = std::collections::HashSet::new();
         for hand in combos {
             let hand_id = hand_to_id(&hand);
-            let unique_hand_mask = unique_rank_mask_vec(&hand_id);
+            let unique_hand_mask = unique_rank_mask(&hand_id);
             assert!(!seen.contains(&unique_hand_mask), "Duplicate hand found, {:?}", hand);
             seen.insert(unique_hand_mask);
         };
@@ -159,9 +162,6 @@ mod straight_test {
     }
 }
 
-pub fn hand_to_id(hand: &Vec<Card>) -> Vec<CardId> {
-    hand.iter().map(|card| card_to_id(card)).collect::<Vec<u32>>()
-}
 
 pub fn generate_unique_fives(lower_take_index: usize, upper_take_index: usize) -> [u16; BIT_REP_LIMIT + 1] {
     let mut lower_take_set = HashMap::<u16, u32>::new();
@@ -169,7 +169,7 @@ pub fn generate_unique_fives(lower_take_index: usize, upper_take_index: usize) -
 
     for hand in generate_all_unique_rank_combos(5) {
         let hand_id = hand_to_id(&hand);
-        let rank_mask = unique_rank_mask_vec(&hand_id) as u16;
+        let rank_mask = unique_rank_mask(&hand_id) as u16;
 
         match is_straight(&hand) {
             false => {
@@ -227,7 +227,7 @@ mod flush_tests {
 
     fn evaluate_flush(hand: &Vec<Card>) -> u16 {
         let hand = hand_to_id(&hand);
-        let rank_mask = unique_rank_mask_vec(&hand);
+        let rank_mask = unique_rank_mask(&hand);
         let evaluation = FLUSHES_MAP[rank_mask as usize];
         evaluation
     }

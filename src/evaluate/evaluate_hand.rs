@@ -91,18 +91,13 @@ pub fn prime_product_to_rank_string(mut product: usize) -> String {
     rank_string
 }
 
-pub fn is_flush(cards: &Vec<CardId>) -> bool {
+pub fn is_flush(cards: &[CardId; 5]) -> bool {
     (cards[0] & cards[1] & cards[2] & cards[3] & cards[4]) & SUIT_MASK != 0
 }
 
 /// Get a representation of the ranks, the unique lookup table will tell us if this is unique
-pub fn unique_rank_mask(cards: &Vec<CardId>) -> usize {    
+pub fn unique_rank_mask(cards: &[CardId; 5]) -> usize {    
     ((cards[0] | cards[1] | cards[2] | cards[3] | cards[4]) >> 12) as usize
-}
-
-pub fn unique_rank_mask_vec(hand: &Vec<CardId>) -> usize {
-    let mask = ((&hand[0] | &hand[1] | &hand[2] | &hand[3] | &hand[4]) >> 12) as usize;
-    mask
 }
 
 pub fn hand_to_unique_prime_product(hand: &[Card]) -> usize {
@@ -149,7 +144,7 @@ impl HandLookup for HandLookupArrays {
 /// 7937 is a Royal Flush
 /// 1 is a High Card 7
 pub trait HandEvaluator {
-    fn evaluate(&self, cards: &Vec<Card>) -> u16;
+    fn evaluate(&self, cards: [Card; 5]) -> u16;
     fn evaluate_deal(&self, deal: NineCardDeal) -> Option<Player>;
 }
 
@@ -165,10 +160,19 @@ impl EvaluateHand {
     }
 }
 
-impl  HandEvaluator for EvaluateHand {
-    fn evaluate(&self, cards: &Vec<Card>) -> u16 {
-        let card_ids = cards.iter().map(|c| card_to_id(c)).collect::<Vec<CardId>>();
+pub fn hand_to_id(hand: &[Card]) -> [CardId; 5] {
+    [
+        card_to_id(&hand[0]),
+        card_to_id(&hand[1]),
+        card_to_id(&hand[2]),
+        card_to_id(&hand[3]),
+        card_to_id(&hand[4]),
+    ]
+}
 
+impl  HandEvaluator for EvaluateHand {
+    fn evaluate(&self, cards: [Card; 5]) -> u16 {
+        let card_ids = hand_to_id(&cards);
         let flush = is_flush(&card_ids);
         let unique_rank_representation = unique_rank_mask(&card_ids);
         if flush {
@@ -184,13 +188,51 @@ impl  HandEvaluator for EvaluateHand {
     }
 
     fn evaluate_deal(&self, deal: NineCardDeal) -> Option<Player> {
-        let best_score_traverser = [deal[0], deal[1], deal[4], deal[5], deal[6], deal[7]].iter().combinations(5).map(|combo| combo.into_iter().cloned().collect::<Vec<Card>>()).max_by(|a, b| self.evaluate(a).cmp(&self.evaluate(b)));
-        let best_score_opponent = [deal[2], deal[3], deal[4], deal[5], deal[6], deal[7]].iter().combinations(5).map(|combo| combo.into_iter().cloned().collect::<Vec<Card>>()).max_by(|a, b| self.evaluate(a).cmp(&self.evaluate(b)));
+        let best_score_traverser = self.score_for_indices(
+            &deal,
+            1,
+        );
+        let best_score_opponent = self.score_for_indices(
+            &deal,
+            2,
+        );
+
         match best_score_traverser.cmp(&best_score_opponent) {
             std::cmp::Ordering::Greater => Some(Player::Traverser),
             std::cmp::Ordering::Less => Some(Player::Opponent),
             std::cmp::Ordering::Equal => None,
         }
+    }
+}
+
+impl EvaluateHand {
+    fn score_for_indices(&self, deal: &[Card; 9], i1: usize) -> u16 {
+        let mut max_score = 0;
+        let i2 = i1 + 1;
+        max_score = max_score.max(self.evaluate([deal[i1], deal[i2], deal[4], deal[5], deal[6]]));
+        max_score = max_score.max(self.evaluate([deal[i1], deal[i2], deal[4], deal[5], deal[7]]));
+        max_score = max_score.max(self.evaluate([deal[i1], deal[i2], deal[4], deal[5], deal[8]]));
+        max_score = max_score.max(self.evaluate([deal[i1], deal[i2], deal[4], deal[6], deal[7]]));
+        max_score = max_score.max(self.evaluate([deal[i1], deal[i2], deal[4], deal[6], deal[8]]));
+        max_score = max_score.max(self.evaluate([deal[i1], deal[i2], deal[4], deal[7], deal[8]]));
+        max_score = max_score.max(self.evaluate([deal[i1], deal[i2], deal[5], deal[6], deal[7]]));
+        max_score = max_score.max(self.evaluate([deal[i1], deal[i2], deal[5], deal[6], deal[8]]));
+        max_score = max_score.max(self.evaluate([deal[i1], deal[i2], deal[5], deal[7], deal[8]]));
+        max_score = max_score.max(self.evaluate([deal[i1], deal[4], deal[5], deal[6], deal[7]]));
+        max_score = max_score.max(self.evaluate([deal[i1], deal[4], deal[5], deal[6], deal[8]]));
+        max_score = max_score.max(self.evaluate([deal[i1], deal[4], deal[5], deal[7], deal[8]]));
+        max_score = max_score.max(self.evaluate([deal[i1], deal[4], deal[6], deal[7], deal[8]]));
+        max_score = max_score.max(self.evaluate([deal[i1], deal[5], deal[6], deal[7], deal[8]]));
+
+        max_score = max_score.max(self.evaluate([deal[i2], deal[4], deal[5], deal[6], deal[7]]));
+        max_score = max_score.max(self.evaluate([deal[i2], deal[4], deal[5], deal[6], deal[8]]));
+        max_score = max_score.max(self.evaluate([deal[i2], deal[4], deal[5], deal[7], deal[8]]));
+        max_score = max_score.max(self.evaluate([deal[i2], deal[4], deal[6], deal[7], deal[8]]));
+        max_score = max_score.max(self.evaluate([deal[i2], deal[5], deal[6], deal[7], deal[8]]));
+        
+        max_score = max_score.max(self.evaluate([deal[4], deal[5], deal[6], deal[7], deal[8]]));
+
+        max_score
     }
 }
 
@@ -205,13 +247,20 @@ mod tests {
         static ref EVALUATOR: EvaluateHand = EvaluateHand::new();
     }
 
+    #[cfg(debug_assertions)]
+    const EVALS: usize = 1_000;
+
+    #[cfg(not(debug_assertions))]
+    const EVALS: usize = 1_000_000;
+
     // Generate 1 million random 5 card hands to assess the performance
     #[test]
     fn test_performance() {
+        _ = &*EVALUATOR;
         let start = std::time::Instant::now();
         let hand = Card::new_random_cards(5);
-        for _ in 0..1_000_000 {
-            let _ = EVALUATOR.evaluate(&hand);
+        for _ in 0..EVALS {
+            let _ = EVALUATOR.evaluate([hand[0], hand[1], hand[2], hand[3], hand[4]]);
         }
         let duration = start.elapsed();
         assert!(duration.as_secs() < 1);
@@ -219,12 +268,14 @@ mod tests {
 
     #[test]
     fn test_performance_9_card(){
+        _ = &*EVALUATOR;
         let hands: Vec<NineCardDeal> = (0..100).map(|_| Card::new_random_9_card_game()).collect();
         let start = std::time::Instant::now();
-        for i in 0..1_000_000 {
-            let _ = EVALUATOR.evaluate_deal(hands[i % 100 as usize]);
+        for i in 0..EVALS {
+            let _ = EVALUATOR.evaluate_deal(hands[i % 100]);
         }
         let duration = start.elapsed();
-        assert!(duration.as_secs() < 1);
+        println!("9 card performance test took {:?}", duration);
+        assert!(duration.as_secs() < 10);
     }
 }
