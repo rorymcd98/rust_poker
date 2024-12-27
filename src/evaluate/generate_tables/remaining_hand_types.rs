@@ -1,9 +1,5 @@
-use std::collections::HashMap;
-use crate::Card;
-use crate::Rank;
-use crate::Suit;
+use crate::{models::card::Rank, Card};
 use itertools::Itertools;
-use crate::evaluate::evaluate_hand::{CardId, PRIME_MASK, BIT_REP_LIMIT, card_to_id, unique_rank_mask};
 
 /// Hand evaluation for cards which aren't flushes, straights, or high cards
 #[derive(Debug, PartialEq, Eq)]

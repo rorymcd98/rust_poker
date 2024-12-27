@@ -1,7 +1,6 @@
-use std::cell::RefCell;
 use rand::Rng;
 
-use crate::traversal::action::{self, DEFAULT_ACTION_COUNT};
+use crate::traversal::action::{DEFAULT_ACTION_COUNT};
 
 /// Strategy struct to hold the current strategy and the sum of all strategies
 pub struct Strategy {

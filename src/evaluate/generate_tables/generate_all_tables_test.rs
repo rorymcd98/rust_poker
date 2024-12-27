@@ -1,8 +1,4 @@
-use generate_flush_table::{generate_all_unique_rank_combos, generate_flushes_table};
-use generate_remaining_table::generate_remaining_table;
-use generate_unique_five_table::generate_unique_five_table;
 
-use crate::evaluate::evaluate_hand::{id_mask_to_string, prime_product_to_rank_string, BIT_REP_LIMIT, DISTINCT_CARD_COMBOS};
 
 use super::*;
 

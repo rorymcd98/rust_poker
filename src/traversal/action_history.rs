@@ -1,7 +1,4 @@
 use crate::traversal::action::Action;
-use crate::models::card::Card;
-use crate::models::card::Rank;
-use crate::models::card::Suit;
 use crate::models::player::Player;
 
 // A live record of the game state that also acts as a key to the various strategies

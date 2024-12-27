@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::*;
 use evaluate::evaluate_hand::hand_to_unique_prime_product;
 use itertools::Itertools;
+use models::card::Rank;
 use crate::evaluate::evaluate_hand::{REMAINING_LOOKUP_PRODUCT};
 
 use super::remaining_hand_types::{classify_hand_type, evaluate_pair, evaluate_two_pair, evaluate_three_of_a_kind, evaluate_full_house, evaluate_four_of_a_kind, HandType};
@@ -31,7 +32,7 @@ pub fn generate_remaining_table() -> Vec<u16> {
     for hand in hands {
         let prime_product_identifier = hand_to_unique_prime_product(&hand);
         let cards: Vec<Rank> = hand.iter().map(|r| r.rank.clone()).collect();
-        let hand_type = classify_hand_type(&hand);
+        let hand_type: HandType = classify_hand_type(&hand);
         match hand_type {
             HandType::Pair(_) => {
                 pair_evaluations.insert(prime_product_identifier, evaluate_pair(hand_type, cards));

@@ -1,35 +1,41 @@
+use lazy_static::lazy_static;
+
+use crate::evaluate::evaluate_hand::EvaluateHand;
+use crate::evaluate::evaluate_hand::HandEvaluator;
+use crate::models::card::NineCardDeal;
 use crate::models::Card;
 use crate::models::Suit;
 use crate::models::Player;
 use crate::traversal::action::Action;
-use super::{action, action_history, strategy};
 use super::strategy::{strategy_map::StrategyMap, strategy_branch::StrategyBranch};
 use super::action_history::ActionHistory;
 use std::cell::{Cell, RefCell};
+
+lazy_static! {
+    static ref EVALUATOR: EvaluateHand = EvaluateHand::new();
+}
 
 struct GameStateHelper {
     action_history: RefCell<ActionHistory>,
     traverser_pot: Cell<u8>,
     opponent_pot: Cell<u8>,
-    traverser_hand: [Card; 2],
-    opponent_hand: [Card; 2],
+    cards: [Card; 9],
+    cards_dealt: Cell<u8>,
     current_player: Cell<Player>,
     small_blind_player: Player,
-    board: RefCell<Vec<Card>>,
     bets_this_round: Cell<u8>,
 }
 
 impl GameStateHelper {
-    pub fn new(action_history: ActionHistory, traverser_hand: [Card; 2], current_turn: Player, small_blind_player: Player) -> GameStateHelper {
+    pub fn new(action_history: ActionHistory, nine_card_deal: NineCardDeal, current_turn: Player, small_blind_player: Player) -> GameStateHelper {
         GameStateHelper {
             action_history: RefCell::new(action_history),
             traverser_pot: Cell::new(0),
             opponent_pot: Cell::new(0),
-            traverser_hand,
-            opponent_hand: [Card::default(), Card::default()],
+            cards: nine_card_deal,
+            cards_dealt: Cell::new(0),
             current_player: Cell::new(current_turn),
             small_blind_player,
-            board: RefCell::new(Vec::<Card>::new()),
             bets_this_round: Cell::new(0),
         }
     }
@@ -50,16 +56,16 @@ impl GameStateHelper {
         self.current_player.set(self.small_blind_player.get_opposite());
     }
 
-    pub fn get_combined_hands(&self) -> Vec<Card> {
-        let mut combined_hand = self.traverser_hand.to_vec();
-        combined_hand.extend_from_slice(&self.opponent_hand);
-        combined_hand
+    pub fn get_flop(&self) -> [Card; 3] {
+        [self.cards[4], self.cards[5], self.cards[6]]
     }
 
-    pub fn get_combined_cards(&self) -> Vec<Card> {
-        let mut combined_cards = self.board.borrow().clone();
-        combined_cards.extend_from_slice(&self.get_combined_hands());
-        combined_cards
+    pub fn get_turn(&self) -> Card {
+        self.cards[7]
+    }
+
+    pub fn get_river(&self) -> Card {
+        self.cards[8]
     }
 
     pub fn get_num_available_actions(&self) -> usize {
@@ -86,7 +92,7 @@ impl GameStateHelper {
         let action_history = &self.action_history.borrow().history;
         let last_two_actions = &action_history[action_history.len() - 2..];
         // TODO - handle the preflop edge case
-        let is_river = self.board.borrow().len() == 5;
+        let is_river = self.cards_dealt.get() == 5;
         is_river || match last_two_actions {
             [Action::Bet, Action::CheckFold] => true,
             _ => false,
@@ -97,7 +103,8 @@ impl GameStateHelper {
         0.0
     }
 
-    fn evaluate_shodown(&self) -> f64 {
+    fn evaluate_showdown(&self) -> f64 {
+        let a = EVALUATOR.evaluate_deal(self.cards);
         0.0
     }
 
@@ -203,7 +210,9 @@ impl TreeTraverser {
                 action_history.history.push(Action::Deal(traverser_cards[0].clone()));
                 action_history.history.push(Action::Deal(traverser_cards[1].clone()));
 
-                let game_state = GameStateHelper::new(action_history.clone(), traverser_cards, player.clone(), player.clone());
+                let deal = Card::new_random_9_card_game_with(traverser_cards[0], traverser_cards[1]);
+
+                let game_state = GameStateHelper::new(action_history.clone(), deal, player.clone(), player.clone());
                 
                 let mut branch_traverser = BranchTraverser::new(strategy_branch, game_state);
                 let utility = branch_traverser.begin_traversal();
@@ -228,16 +237,8 @@ impl BranchTraverser {
         }
     }
 
-    pub fn begin_traversal(&mut self) -> f64 {
-        let mut opponent_cards = Card::get_n_more_cards(&self.game_state.traverser_hand.to_vec(), 2);
-        opponent_cards.sort();
-        self.game_state.opponent_hand = [opponent_cards[0].clone(), opponent_cards[1].clone()];
-        
-        self.game_state.action_history.borrow_mut().history.push(Action::Deal(opponent_cards[0].clone()));
-        self.game_state.action_history.borrow_mut().history.push(Action::Deal(opponent_cards[1].clone()));
+    pub fn begin_traversal(&mut self) -> f64 {        
         let utility = self.traverse_action();
-        self.game_state.action_history.borrow_mut().history.pop();
-        self.game_state.action_history.borrow_mut().history.pop();
         utility
     }
 
@@ -322,31 +323,28 @@ impl BranchTraverser {
     
 
     fn traverse_flop(&self) -> f64 {
-        let mut three_more_cards = Card::get_n_more_cards(&self.game_state.get_combined_cards(), 3);
-        three_more_cards.sort();
-        for card in three_more_cards {
-            self.game_state.board.borrow_mut().push(card.clone());
+        let mut flop_cards = self.game_state.get_flop();
+        flop_cards.sort();
+        self.game_state.cards_dealt.set(self.game_state.cards_dealt.get() + 3);
+        for card in flop_cards {
             self.game_state.action_history.borrow_mut().history.push(Action::Deal(card));
         }
         self.game_state.set_current_player_to_big_blind();
         let utility = self.traverse_action();
         for _ in 0..3 {
-            self.game_state.board.borrow_mut().pop();
             self.game_state.action_history.borrow_mut().history.pop();
         }
+        self.game_state.cards_dealt.set(self.game_state.cards_dealt.get() - 3);
         utility
     }
 
     fn traverse_deal(&self) -> f64 {
-        let card = Card::get_one_more_card(&self.game_state.get_combined_cards());
-        
-        self.game_state.board.borrow_mut().push(card.clone());
+        let card = self.game_state.cards[self.game_state.cards_dealt.get() as usize];
         self.game_state.action_history.borrow_mut().history.push(Action::Deal(card));
-        
+        self.game_state.cards_dealt.set(self.game_state.cards_dealt.get() + 1);
         let utility = self.traverse_action();
-
-        self.game_state.board.borrow_mut().pop();
         self.game_state.action_history.borrow_mut().history.pop();
+        self.game_state.cards_dealt.set(self.game_state.cards_dealt.get() - 1);
         utility
     }
 }

@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 use crate::evaluate::evaluate_hand::hand_to_id;
 use crate::evaluate::evaluate_hand::unique_rank_mask;
+use crate::models::card::Rank;
 use crate::Card;
-use crate::Rank;
 use crate::Suit;
 use itertools::Itertools;
-use crate::evaluate::evaluate_hand::{CardId, PRIME_MASK, BIT_REP_LIMIT, card_to_id};
+use crate::evaluate::evaluate_hand::BIT_REP_LIMIT;
 
 pub const NON_STRAIGHT_COUNT: usize = 1277; // The number of hands consisting of 5 unique cards which are not straights
 pub const STRAIGHT_COUNT: usize = 10;

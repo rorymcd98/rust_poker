@@ -1,14 +1,7 @@
-use itertools::Itertools;
-use lazy_static::lazy_static;
-use rand::seq::SliceRandom;
-use rand::{seq::IteratorRandom, Rng};
-use rand::rngs::SmallRng;
-use std::cell::RefCell;
+use rand::Rng;
 use std::hash::{Hash, Hasher};
-use std::vec;
 use crate::thread_utils::with_rng;
 
-use rand::SeedableRng;
 
 // 2 for traverser, 2 for opponent, 5 for board
 pub type NineCardDeal = [Card; 9];
