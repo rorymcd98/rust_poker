@@ -42,12 +42,6 @@ pub fn validate_history(history: &Vec<Action>) {
                 bets_this_turn = 0;
                 seen.push(card.clone());
                 deal_count += 1;
-                if prev_prev.is_bet() && prev.is_checkfold() {
-                    panic!("Shouldn't be dealing, opponent just folded: {:?}", history);
-                }
-                if (deal_count == 1 || deal_count > 3) && !is_round_over(&prev_prev, &prev) {
-                    panic!("Shouldn't be dealing, round wasn't over ({:?}, {:?}) : {:?}", prev_prev, prev, history);
-                }
                 match deal_count {
                     1 => {
                         if prev.is_deal() {
@@ -78,6 +72,13 @@ pub fn validate_history(history: &Vec<Action>) {
                 }
                 if deal_count > 5 {
                     panic!("Too many deals: {:?}", history);
+                }
+
+                if prev_prev.is_bet() && prev.is_checkfold() {
+                    panic!("Shouldn't be dealing, opponent just folded: {:?}", history);
+                }
+                if (deal_count == 1 || deal_count > 3) && !is_round_over(&prev_prev, &prev) {
+                    panic!("Shouldn't be dealing, round wasn't over ({:?}, {:?}) : {:?}", prev_prev, prev, history);
                 }
             },
             Action::CheckFold => {

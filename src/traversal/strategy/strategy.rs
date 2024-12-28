@@ -36,7 +36,7 @@ impl Strategy {
         for a in 0..self.actions {
             self.regrets[a] += action_utilities[a] - strategy_utility;
         }
-        self.update_current_strategy();
+        self.update_current_strategy();// TODO - How does the current strategy improve?
         self.update_strategy_sum_iter(iter);
     }
 

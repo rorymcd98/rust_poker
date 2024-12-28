@@ -3,6 +3,7 @@ use lazy_static::lazy_static;
 use crate::evaluate::evaluate_hand::EvaluateHand;
 use crate::evaluate::evaluate_hand::HandEvaluator;
 use crate::models::card::NineCardDeal;
+use crate::models::card::Rank;
 use crate::models::Card;
 use crate::models::Suit;
 use crate::models::Player;
@@ -33,6 +34,7 @@ struct GameStateHelper {
     current_player: Cell<Player>,
     small_blind_player: Player,
     bets_this_round: Cell<u8>,
+    winner: Option<Player>,
 }
 
 
@@ -48,6 +50,7 @@ impl GameStateHelper {
             current_player: Cell::new(small_blind_player),
             small_blind_player,
             bets_this_round: Cell::new(0),
+            winner: EVALUATOR.evaluate_deal(nine_card_deal),
         }
     }
 
@@ -69,14 +72,6 @@ impl GameStateHelper {
 
     pub fn get_flop(&self) -> [Card; 3] {
         [self.cards[4], self.cards[5], self.cards[6]]
-    }
-
-    pub fn get_turn(&self) -> Card {
-        self.cards[7]
-    }
-
-    pub fn get_river(&self) -> Card {
-        self.cards[8]
     }
 
     pub fn is_preflop(&self) -> bool {
@@ -133,9 +128,8 @@ impl GameStateHelper {
     }
 
     fn evaluate_showdown(&self) -> f64 {
-        validate_history(&self.action_history.borrow().history);
-        let winner = EVALUATOR.evaluate_deal(self.cards);
-        match winner {
+        // validate_history(&self.action_history.borrow().history);
+        match self.winner {
             Some(Player::Traverser) => -(self.traverser_pot.get() as f64),
             Some(Player::Opponent) => self.opponent_pot.get() as f64,
             None => 0.0,
@@ -231,15 +225,8 @@ impl GameStateHelper {
 
     // implement deal and undeal
     pub fn deal(&self) {
-        // {
-        //     let action_history = &self.action_history.borrow().history;
-        //     let last_two_actions = &action_history[action_history.len() - 2..];
-        //     match last_two_actions {
-        //         [Action::Bet, Action::CheckFold] => panic!("Invalid state - should not have a bet followed by a checkfold, then a deal {:?}", &self.action_history.borrow().history),
-        //         _ => TerminalState::None,
-        //     };
-        // }
-        let card = self.cards[self.cards_dealt.get() as usize];
+        let deal = 4 + self.cards_dealt.get() as usize;
+        let card = self.cards[deal];
         self.action_history.borrow_mut().history.push(Action::Deal(card));
         self.cards_dealt.set(self.cards_dealt.get() + 1);
         self.bets_this_round.set(0);
@@ -254,14 +241,6 @@ impl GameStateHelper {
     }
 
     pub fn deal_flop(&self) {
-        // {
-        //     let action_history = &self.action_history.borrow().history;
-        //     let last_two_actions = &action_history[action_history.len() - 2..];
-        //     match last_two_actions {
-        //         [Action::Bet, Action::CheckFold] => panic!("Invalid state - should not have a bet followed by a checkfold, then a deal {:?}", &self.action_history.borrow().history),
-        //         _ => TerminalState::None,
-        //     };
-        // }
         let flop = self.get_flop();
         for card in flop {
             self.action_history.borrow_mut().history.push(Action::Deal(card));
@@ -296,13 +275,16 @@ impl TreeTraverser {
 
     pub fn begin_tree_traversal(self){
         let players = vec![Player::Traverser, Player::Opponent];
-    
+        let mut highest_so_far = 0.0;
+        let mut highest_combo = (Card::new(Suit::Spades, Rank::Two), Card::new(Suit::Spades, Rank::Two));
         for player in players { // Alternate between who is small blind
-            let action_history = &mut ActionHistory::new(vec![]);
-            for card_combo in Card::all_suited_combos(Suit::Spades).take(1) {
-                for iteration in 0..1_000 {
-                    // println!("Iteration: {}", iteration);
-                    let card_combo_print = card_combo.clone();
+            for card_combo in Card::all_suited_combos(Suit::Spades) {
+            // for card_combo in ace_pair.iter() {
+                let mut average_utility = 0.0;
+                let card_combo_print = card_combo.clone();
+                println!("Starting card combo {:?}", card_combo_print);
+                for iteration in 0..10_000 {
+                    let action_history = &mut ActionHistory::new(vec![]); // TODO - optimise this
                     // This defines our branch - our hole cards and whether we're the traverser
                     let traverser_cards = [card_combo.0, card_combo.1];
                     let strategy_branch = StrategyBranch::new();
@@ -310,6 +292,7 @@ impl TreeTraverser {
                     action_history.history.push(Action::Deal(traverser_cards[0].clone()));
                     action_history.history.push(Action::Deal(traverser_cards[1].clone()));
     
+                    // TODO - move the evaluation into the game state
                     let deal = Card::new_random_9_card_game_with(traverser_cards[0], traverser_cards[1]);
     
                     let game_state = GameStateHelper::new(action_history.clone(), deal, player.clone());
@@ -317,11 +300,16 @@ impl TreeTraverser {
                     let strategy_branch = RefCell::new(branch);
                     let mut branch_traverser = BranchTraverser::new(strategy_branch, game_state, iteration);
     
-                    let utility = branch_traverser.begin_traversal();
-                    // println!("Utility of card {:?}: {}", card_combo_print, utility);
+                    average_utility -= branch_traverser.begin_traversal();
+                }
+                average_utility /= 1_000.0;
+                if average_utility > highest_so_far {
+                    highest_so_far = average_utility;
+                    highest_combo = card_combo_print;
                 }
             }
         }
+        println!("Highest average utility: {} with card combo {:?}", highest_so_far, highest_combo);
     }
 }
 
