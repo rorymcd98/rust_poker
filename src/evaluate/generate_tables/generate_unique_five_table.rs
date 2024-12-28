@@ -27,6 +27,18 @@ mod tests {
         evaluation
     }
 
+    // A test to show the hand evaluation and board evaluation order doesn't mattter
+    #[test]
+    fn order_invariance_hand(){
+        for _ in 0..1_000 {
+            let hand = Card::new_random_cards(5);
+            let first_eval = evaluate_fives(&hand);
+            for perm in hand.into_iter().permutations(5) {
+                assert_eq!(first_eval, evaluate_fives(&perm));
+            }
+        }
+    }
+
     fn compare_fives(hand1: &Vec<Card>, hand2: &Vec<Card>, ord: std::cmp::Ordering) {
         if hand1.iter().unique().count() != 5 || hand2.iter().unique().count() != 5 {
             panic!("Hands must have 5 unique cards");

@@ -94,12 +94,25 @@ pub fn generate_remaining_table() -> Vec<u16> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use evaluate::generate_tables::generate_flush_table::generate_all_unique_rank_combos;
     use models::card::{Card, Suit};
     use lazy_static::lazy_static;
     use crate::evaluate::evaluate_hand::{prime_product_to_rank_string, DISTINCT_CARD_COMBOS};
 
+    #[cfg(debug_assertions)]
+    const EVALS: usize = 1_000;
+
+    #[cfg(not(debug_assertions))]
+    const EVALS: usize = 100_000;
+
     lazy_static! {
         static ref REMAINING_TABLE: Vec<u16> = generate_remaining_table();
+    }
+
+    fn evaluate_remaining(hand: &[Card]) -> u16 {
+        let prime_product_identifier = hand_to_unique_prime_product(hand);
+        let evaluation = REMAINING_TABLE[prime_product_identifier];
+        evaluation
     }
 
     #[test]
@@ -131,7 +144,178 @@ mod tests {
         ];
         let prime_product_identifier = hand_to_unique_prime_product(&hand);
         let evaluation = REMAINING_TABLE[prime_product_identifier];
-        assert_eq!(evaluation, 3582);
+        print!("{:?}", evaluation);
+        assert_eq!(evaluation, 3530);
     }
 
+    // Ctrl + Shift + F: "Expected ranges for hand evals"
+
+    #[test]
+    fn best_pair() {
+        let hand = vec![
+            Card::new(Suit::random(), Rank::Ace),
+            Card::new(Suit::random(), Rank::Ace),
+            Card::new(Suit::random(), Rank::King),
+            Card::new(Suit::random(), Rank::Queen),
+            Card::new(Suit::random(), Rank::Jack),
+        ];
+        let evaluation = evaluate_remaining(&hand);
+        assert_eq!(evaluation, 4137);
+    }
+
+    #[test]
+    fn worst_pair() {
+        let hand = vec![
+            Card::new(Suit::random(), Rank::Two),
+            Card::new(Suit::random(), Rank::Two),
+            Card::new(Suit::random(), Rank::Three),
+            Card::new(Suit::random(), Rank::Four),
+            Card::new(Suit::random(), Rank::Five),
+        ];
+        let evaluation = evaluate_remaining(&hand);
+        assert_eq!(evaluation, 1278);
+    }
+
+    #[test]
+    fn best_two_pair() {
+        let hand = vec![
+            Card::new(Suit::random(), Rank::Ace),
+            Card::new(Suit::random(), Rank::Ace),
+            Card::new(Suit::random(), Rank::King),
+            Card::new(Suit::random(), Rank::King),
+            Card::new(Suit::random(), Rank::Queen),
+        ];
+        let evaluation = evaluate_remaining(&hand);
+        assert_eq!(evaluation, 4995);
+    }
+
+    #[test]
+    fn worst_two_pair() {
+        let hand = vec![
+            Card::new(Suit::random(), Rank::Two),
+            Card::new(Suit::random(), Rank::Two),
+            Card::new(Suit::random(), Rank::Three),
+            Card::new(Suit::random(), Rank::Three),
+            Card::new(Suit::random(), Rank::Four),
+        ];
+        let evaluation = evaluate_remaining(&hand);
+        assert_eq!(evaluation, 4138);
+    }
+
+    #[test]
+    fn best_three_of_a_kind() {
+        let hand = vec![
+            Card::new(Suit::random(), Rank::Ace),
+            Card::new(Suit::random(), Rank::Ace),
+            Card::new(Suit::random(), Rank::Ace),
+            Card::new(Suit::random(), Rank::King),
+            Card::new(Suit::random(), Rank::Queen),
+        ];
+        let evaluation = evaluate_remaining(&hand);
+        assert_eq!(evaluation, 5853);
+    }
+
+    #[test]
+    fn worst_three_of_a_kind() {
+        let hand = vec![
+            Card::new(Suit::random(), Rank::Two),
+            Card::new(Suit::random(), Rank::Two),
+            Card::new(Suit::random(), Rank::Two),
+            Card::new(Suit::random(), Rank::Three),
+            Card::new(Suit::random(), Rank::Four),
+        ];
+        let evaluation = evaluate_remaining(&hand);
+        assert_eq!(evaluation, 4996);
+    }
+
+    #[test]
+    fn best_full_house() {
+        let hand = vec![
+            Card::new(Suit::random(), Rank::Ace),
+            Card::new(Suit::random(), Rank::Ace),
+            Card::new(Suit::random(), Rank::Ace),
+            Card::new(Suit::random(), Rank::King),
+            Card::new(Suit::random(), Rank::King),
+        ];
+        let evaluation = evaluate_remaining(&hand);
+        assert_eq!(evaluation, 7296);
+    }
+
+    #[test]
+    fn worst_full_house() {
+        let hand = vec![
+            Card::new(Suit::random(), Rank::Two),
+            Card::new(Suit::random(), Rank::Two),
+            Card::new(Suit::random(), Rank::Two),
+            Card::new(Suit::random(), Rank::Three),
+            Card::new(Suit::random(), Rank::Three),
+        ];
+        let evaluation = evaluate_remaining(&hand);
+        assert_eq!(evaluation, 7141);
+    }
+
+    #[test]
+    fn best_four_of_a_kind() {
+        let hand = vec![
+            Card::new(Suit::random(), Rank::Ace),
+            Card::new(Suit::random(), Rank::Ace),
+            Card::new(Suit::random(), Rank::Ace),
+            Card::new(Suit::random(), Rank::Ace),
+            Card::new(Suit::random(), Rank::King),
+        ];
+        let evaluation = evaluate_remaining(&hand);
+        assert_eq!(evaluation, 7452);
+    }
+
+    #[test]
+    fn worst_four_of_a_kind() {
+        let hand = vec![
+            Card::new(Suit::random(), Rank::Two),
+            Card::new(Suit::random(), Rank::Two),
+            Card::new(Suit::random(), Rank::Two),
+            Card::new(Suit::random(), Rank::Two),
+            Card::new(Suit::random(), Rank::Three),
+        ];
+        let evaluation = evaluate_remaining(&hand);
+        assert_eq!(evaluation, 7297);
+    }
+
+
+    #[test]
+    fn all_straights_and_highcards_are_zero(){
+        let straights = generate_all_unique_rank_combos(5);
+        for straight in straights {
+            let evaluation = evaluate_remaining(&straight);
+            assert_eq!(evaluation, 0);
+        }
+    }
+
+    // A test to show the hand evaluation and board evaluation order doesn't mattter
+    #[test]
+    fn order_invariance_hand(){
+        for _ in 0..EVALS {
+            let hand = Card::new_random_cards(5);
+            let first_eval = evaluate_remaining(&hand);
+            for perm in hand.into_iter().permutations(5) {
+                assert_eq!(first_eval, evaluate_remaining(&perm));
+            }
+        }
+    }
+
+    #[test]
+    fn test_correct_bucketing(){
+        for _ in 0..EVALS {
+            let hand = Card::new_random_cards(5);
+            let eval = evaluate_remaining(&hand);
+            let hand_type = classify_hand_type(&hand);
+            match hand_type {
+                HandType::None => assert!(eval == 0),
+                HandType::Pair(_) => assert!(eval < 4138 && eval >= 1278),
+                HandType::TwoPair(_, _) => assert!(eval < 4996 && eval >= 4138),
+                HandType::ThreeOfAKind(_) => assert!(eval < 5854 && eval >= 4996),
+                HandType::FullHouse(_, _) => assert!(eval < 7297 && eval >= 7141),
+                HandType::FourOfAKind(_) => assert!(eval < 7453 && eval >= 7297),
+            }
+        }
+    }
 }

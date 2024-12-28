@@ -44,6 +44,10 @@ impl Suit {
         }
     }
 
+    pub fn to_bit(&self) -> u32 {
+        1 << self.to_int()
+    }
+
     pub fn random() -> Suit {
         with_rng(|rng| Suit::from_int(rng.gen_range(0..4)))
     }
@@ -146,6 +150,10 @@ impl Rank {
             Rank::King => 37,
             Rank::Ace => 41,
         }
+    }
+
+    pub fn to_bit(&self) -> u32 {
+        1 << self.to_int()
     }
 }
 

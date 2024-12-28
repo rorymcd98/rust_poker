@@ -225,12 +225,26 @@ mod flush_tests {
         static ref FLUSHES_MAP: [u16; BIT_REP_LIMIT + 1] = generate_flushes_table();
     }
 
-    fn evaluate_flush(hand: &Vec<Card>) -> u16 {
+    fn evaluate_flush(hand: &[Card]) -> u16 {
         let hand = hand_to_id(&hand);
         let rank_mask = unique_rank_mask(&hand);
         let evaluation = FLUSHES_MAP[rank_mask as usize];
         evaluation
     }
+
+
+    // A test to show the hand evaluation and board evaluation order doesn't mattter
+    #[test]
+    fn order_invariance_hand(){
+        for _ in 0..1_000 {
+            let hand = Card::new_random_cards(5);
+            let first_eval = evaluate_flush(&hand);
+            for perm in hand.into_iter().permutations(5) {
+                assert_eq!(first_eval, evaluate_flush(&perm));
+            }
+        }
+    }
+
 
     fn compare_flushes(hand1: &Vec<Card>, hand2: &Vec<Card>, ord: std::cmp::Ordering) {
         if hand1.iter().unique().count() != 5 || hand2.iter().unique().count() != 5 {
@@ -382,6 +396,19 @@ mod flush_tests {
         ];
 
         compare_flushes(&hand1, &hand2, std::cmp::Ordering::Equal);
+    }
+
+    #[test]
+    fn test_worst_flush() {
+        let hand = vec![
+            Card::new(Suit::random(), Rank::Two),
+            Card::new(Suit::random(), Rank::Three),
+            Card::new(Suit::random(), Rank::Four),
+            Card::new(Suit::random(), Rank::Five),
+            Card::new(Suit::random(), Rank::Seven),
+        ];
+        let eval = evaluate_flush(&hand);
+        assert_eq!(eval, 5864);
     }
 
 

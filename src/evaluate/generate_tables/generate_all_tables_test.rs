@@ -1,5 +1,3 @@
-
-
 use generate_flush_table::generate_flushes_table;
 use generate_remaining_table::generate_remaining_table;
 use generate_unique_five_table::generate_unique_five_table;

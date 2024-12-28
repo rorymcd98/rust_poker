@@ -43,8 +43,7 @@ impl Strategy {
     // Update the current strategy based on the instantenous regrets
     fn update_current_strategy(&mut self) {
         let mut normalizing_sum = 0.0;
-        //println!("sum of current strategy before update: {}", self.current_strategy.iter().sum::<f64>());
-
+        
         for r in 0..self.actions {
             self.regrets[r] = f64::max(self.regrets[r], 0.0);
             normalizing_sum += self.regrets[r];
@@ -66,7 +65,6 @@ impl Strategy {
     /// Updates the current strategy, discounting earlier iterations and favouring later ones
     fn update_strategy_sum_iter(&mut self, iter: usize) {
         // first update the strategy sum
-
         let iter = iter as f64;
         for index in 0..self.actions {
             // normalise the existing strategy_sum
@@ -93,8 +91,6 @@ impl Strategy {
         let mut rng = rand::thread_rng();
         let mut action = 0;
         let mut r = rng.gen_range(0.0..1.0);
-        // print the sum of the current strategy
-        //println!("Sum of current strategy: {}", self.current_strategy.iter().sum::<f64>());
         while r > 0.0 {
             r -= self.current_strategy[action];
             action += 1;

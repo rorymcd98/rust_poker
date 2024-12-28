@@ -4,6 +4,16 @@ max 4 bets per round means 9 combinations of checkfold, call, bet
 max 4 betting roudns
 4 * 9 * 52c9 is a lot
 
+// Expected ranges for hand evals
+// High Card:              0 - 1277
+// One pair:            1278 - 4137
+// Two pair:            4138 - 4995
+// Three-of-a-kind:     4996 - 5853
+// Straight:            5854 - 5863
+// Flush:               5864 - 7140
+// Full house:          7141 - 7296
+// Four of a kind:      7297 - 7452
+// Straight flush:      7453 - 7462
 
 Serialisation of the game history
 2 bits for action type

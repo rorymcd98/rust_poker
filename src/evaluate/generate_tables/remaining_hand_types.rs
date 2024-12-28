@@ -1,5 +1,4 @@
 use crate::{models::card::Rank, models::Card};
-use itertools::Itertools;
 
 /// Hand evaluation for cards which aren't flushes, straights, or high cards
 #[derive(Debug, PartialEq, Eq)]
@@ -150,12 +149,12 @@ mod classify_hands_tests {
 
 // Evaluate the remaining cards that don't form part of the pair, trip etc.
 fn evaluate_high_cards(hand: &Vec<Rank>, skip: &Vec<Rank>) -> u32 { // maximum product is 41*37*31 = 47,027 which is conveniently 16 bits
-    let mut prime_product: u16 = 1;
+    let mut prime_product: u32 = 0b0;
     for rank in hand {
         if skip.contains(rank) {
             continue;
         }
-        prime_product *= rank.to_prime() as u16; // keep this at 16 bits to check for int overflow
+        prime_product |= rank.to_bit(); // keep this at 16 bits to check for int overflow
     }
     prime_product as u32
 }
@@ -163,7 +162,7 @@ fn evaluate_high_cards(hand: &Vec<Rank>, skip: &Vec<Rank>) -> u32 { // maximum p
 pub fn evaluate_pair(pair: HandType, cards: Vec<Rank>) -> u32 {
     match pair {
         HandType::Pair(rank) => {
-            return (rank.to_prime() as u32) << 16 | evaluate_high_cards(&cards, &vec![rank]);
+            return (rank.to_int() as u32) << 16 | evaluate_high_cards(&cards, &vec![rank]);
         },
         _ => panic!("Unexepected hand type"),
     }
@@ -172,7 +171,7 @@ pub fn evaluate_pair(pair: HandType, cards: Vec<Rank>) -> u32 {
 pub fn evaluate_two_pair(two_pair: HandType, cards: Vec<Rank>) -> u32 {
     match two_pair {
         HandType::TwoPair(rank1, rank2) => {
-            return (rank1.to_prime() as u32) << 24 | (rank2.to_prime() as u32) << 16 | evaluate_high_cards(&cards, &vec![rank1, rank2]);
+            return (rank1.to_int() as u32) << 24 | (rank2.to_int() as u32) << 16 | evaluate_high_cards(&cards, &vec![rank1, rank2]);
         },
         _ => panic!("Unexepected hand type"),
     }
@@ -181,7 +180,7 @@ pub fn evaluate_two_pair(two_pair: HandType, cards: Vec<Rank>) -> u32 {
 pub fn evaluate_three_of_a_kind(pair: HandType, cards: Vec<Rank>) -> u32 {
     match pair {
         HandType::ThreeOfAKind(rank) => {
-            return (rank.to_prime() as u32) << 16 | evaluate_high_cards(&cards, &vec![rank]);
+            return (rank.to_int() as u32) << 16 | evaluate_high_cards(&cards, &vec![rank]);
         },
         _ => panic!("Unexepected hand type"),
     }
@@ -190,7 +189,7 @@ pub fn evaluate_three_of_a_kind(pair: HandType, cards: Vec<Rank>) -> u32 {
 pub fn evaluate_full_house(full_house: HandType, cards: Vec<Rank>) -> u32 {
     match full_house {
         HandType::FullHouse(rank1, rank2) => {
-            return (rank1.to_prime() as u32) << 24 | (rank2.to_prime() as u32) << 16 | evaluate_high_cards(&cards, &vec![rank1, rank2]);
+            return (rank1.to_int() as u32) << 24 | (rank2.to_int() as u32) << 16 | evaluate_high_cards(&cards, &vec![rank1, rank2]);
         },
         _ => panic!("Unexepected hand type"),
     }
@@ -199,7 +198,7 @@ pub fn evaluate_full_house(full_house: HandType, cards: Vec<Rank>) -> u32 {
 pub fn evaluate_four_of_a_kind(pair: HandType, cards: Vec<Rank>) -> u32 {
     match pair {
         HandType::FourOfAKind(rank) => {
-            return (rank.to_prime() as u32) << 16 | evaluate_high_cards(&cards, &vec![rank]);
+            return (rank.to_int() as u32) << 16 | evaluate_high_cards(&cards, &vec![rank]);
         },
         _ => panic!("Unexepected hand type"),
     }

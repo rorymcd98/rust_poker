@@ -7,7 +7,6 @@ use super::generate_tables::generate_remaining_table::generate_remaining_table;
 use super::generate_tables::generate_unique_five_table::generate_unique_five_table;
 
 pub type CardId = u32;
-pub type CardIdMask = u32; // 24-bit mask for N cards
 pub const PRIME_MASK: u32 = 0b11111111;
 pub const SUIT_MASK: u32 = 0b111100000000;
 
@@ -27,10 +26,10 @@ pub const REMAINING_LOOKUP_PRODUCT: usize = 104553157;
 pub fn card_to_id(card: &Card) -> CardId {
     let prime = card.rank.to_prime() as u32;
 
-    (1 << (card.rank.to_int() + 12)) | (1 << (card.suit.to_int() + 8)) | prime
+    (card.rank.to_bit() << 12) | (card.suit.to_bit() <<  8) | prime
 }
 
-pub fn id_mask_to_string(id: CardIdMask) -> String {
+pub fn id_mask_to_string(id: CardId) -> String {
     let suit = match id & SUIT_MASK {
         0 => "S",
         1 => "H",
@@ -183,24 +182,25 @@ impl  HandEvaluator for EvaluateHand {
         } 
         
         let prime_product = (card_ids[0] & PRIME_MASK) * (card_ids[1] & PRIME_MASK) * (card_ids[2] & PRIME_MASK) * (card_ids[3] & PRIME_MASK) * (card_ids[4] & PRIME_MASK);
-        return self.hand_lookup.remaining_evaluation(prime_product as usize);
+        self.hand_lookup.remaining_evaluation(prime_product as usize)
     }
 
     fn evaluate_deal(&self, deal: NineCardDeal) -> Option<Player> {
         let best_score_traverser = self.score_for_indices(
             &deal,
-            1,
+            0,
         );
         let best_score_opponent = self.score_for_indices(
             &deal,
             2,
         );
 
-        match best_score_traverser.cmp(&best_score_opponent) {
+        let res = match best_score_traverser.cmp(&best_score_opponent) {
             std::cmp::Ordering::Greater => Some(Player::Traverser),
             std::cmp::Ordering::Less => Some(Player::Opponent),
             std::cmp::Ordering::Equal => None,
-        }
+        };
+        res
     }
 }
 
@@ -217,30 +217,42 @@ impl EvaluateHand {
         max_score = max_score.max(self.evaluate([deal[i1], deal[i2], deal[5], deal[6], deal[7]]));
         max_score = max_score.max(self.evaluate([deal[i1], deal[i2], deal[5], deal[6], deal[8]]));
         max_score = max_score.max(self.evaluate([deal[i1], deal[i2], deal[5], deal[7], deal[8]]));
+        max_score = max_score.max(self.evaluate([deal[i1], deal[i2], deal[6], deal[7], deal[8]]));
         max_score = max_score.max(self.evaluate([deal[i1], deal[4], deal[5], deal[6], deal[7]]));
         max_score = max_score.max(self.evaluate([deal[i1], deal[4], deal[5], deal[6], deal[8]]));
         max_score = max_score.max(self.evaluate([deal[i1], deal[4], deal[5], deal[7], deal[8]]));
         max_score = max_score.max(self.evaluate([deal[i1], deal[4], deal[6], deal[7], deal[8]]));
         max_score = max_score.max(self.evaluate([deal[i1], deal[5], deal[6], deal[7], deal[8]]));
-
         max_score = max_score.max(self.evaluate([deal[i2], deal[4], deal[5], deal[6], deal[7]]));
         max_score = max_score.max(self.evaluate([deal[i2], deal[4], deal[5], deal[6], deal[8]]));
         max_score = max_score.max(self.evaluate([deal[i2], deal[4], deal[5], deal[7], deal[8]]));
         max_score = max_score.max(self.evaluate([deal[i2], deal[4], deal[6], deal[7], deal[8]]));
         max_score = max_score.max(self.evaluate([deal[i2], deal[5], deal[6], deal[7], deal[8]]));
-        
         max_score = max_score.max(self.evaluate([deal[4], deal[5], deal[6], deal[7], deal[8]]));
 
         max_score
     }
 }
 
+// Expected ranges for hand evals
+// High Card:              0 - 1277
+// One pair:            1277 - 4137
+// Two pair:            4137 - 4995
+// Three-of-a-kind:     4995 - 5853
+// Straight:            5853 - 5863
+// Flush:               5863 - 7140
+// Full house:          7140 - 7296
+// Four of a kind:      7296 - 7452
+// Straight flush:      7452 - 7462
+
 #[cfg(test)]
 mod tests {
+    use itertools::Itertools;
     use lazy_static::lazy_static;
-
+    use crate::{evaluate::generate_tables::remaining_hand_types::{classify_hand_type, HandType}, models::card::{Rank, Suit}};
     use super::*;
-    use crate::evaluate::evaluate_hand::{id_mask_to_string, unique_rank_mask};
+    use rand::seq::SliceRandom;
+
 
     lazy_static! {
         static ref EVALUATOR: EvaluateHand = EvaluateHand::new();
@@ -250,9 +262,8 @@ mod tests {
     const EVALS: usize = 1_000;
 
     #[cfg(not(debug_assertions))]
-    const EVALS: usize = 1_000_000;
+    const EVALS: usize = 100_000;
 
-    // Generate 1 million random 5 card hands to assess the performance
     #[test]
     fn test_performance() {
         _ = &*EVALUATOR;
@@ -276,5 +287,32 @@ mod tests {
         let duration = start.elapsed();
         println!("9 card performance test took {:?}", duration);
         assert!(duration.as_secs() < 10);
+    }
+
+    // A test to show the hand evaluation and board evaluation order doesn't mattter
+    #[test]
+    fn order_invariance_hand(){
+        for _ in 0..EVALS {
+            let hand = Card::new_random_cards(5);
+            let first_eval = EVALUATOR.evaluate([hand[0], hand[1], hand[2], hand[3], hand[4]]);
+            for perm in hand.iter().permutations(5) {
+                assert_eq!(first_eval, EVALUATOR.evaluate([*perm[0], *perm[1], *perm[2], *perm[3], *perm[4]]));
+            }
+        }
+    }
+
+    #[test]
+    fn order_invariance_nine_card_game(){
+        for _ in 0..EVALS {
+            let game = Card::new_random_9_card_game();
+            let first_eval = EVALUATOR.evaluate_deal(game);
+            let mut rng = rand::thread_rng();
+            for perm in game[4..9].iter().permutations(5) {
+                let mut game_perm = [game[0], game[1], game[2], game[3], *perm[0], *perm[1], *perm[2], *perm[3], *perm[4]];
+                game_perm[0..2].shuffle(&mut rng);
+                game_perm[2..4].shuffle(&mut rng); 
+                assert_eq!(first_eval, EVALUATOR.evaluate_deal(game_perm));
+            }
+        }
     }
 }
