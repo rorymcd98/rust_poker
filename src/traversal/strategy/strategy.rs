@@ -14,6 +14,7 @@ pub struct Strategy {
     strategy_sum: Vec<f64>,
     regrets: Vec<f64>,
     pub actions: usize,
+    play_strategy_calculated: bool,
 }
 
 impl Strategy {
@@ -28,6 +29,7 @@ impl Strategy {
             strategy_sum: current_strategy,
             regrets: vec![0.0; DEFAULT_ACTION_COUNT],
             actions: actions,
+            play_strategy_calculated: false,
         }
     }
 
@@ -66,7 +68,7 @@ impl Strategy {
         // first update the strategy sum
         let iter = iter as f64;
         for index in 0..self.actions {
-            // normalise the existing strategy_sum
+            // // normalise the existing strategy_sum
             let current_strategy_sum = self.strategy_sum[index];
             if current_strategy_sum > 0.0 {
                 let iter_coeff = iter.powf(ALPHA);
@@ -81,12 +83,14 @@ impl Strategy {
             // then add the new contribution calculated on this iteration
             let contribution = self.current_strategy[index] * ((iter / iter + 1.0).powf(GAMMA)); // Weighted according to the iteration using DCRF
             
-            self.strategy_sum[index] += contribution; 
+            self.strategy_sum[index] += contribution;
+            // self.strategy_sum[index] += self.current_strategy[index]; 
         }
     }
 
     // Provides an action index given the current strategy
-    pub fn sample_strategy(&self) -> usize {
+    pub fn sample_strategy(&mut self, playing: bool) -> usize {
+        self.calculate_play_strategy(playing);
         let mut rng = rand::thread_rng();
         let mut action = 0;
         let mut r = rng.gen_range(0.0..1.0);
@@ -95,5 +99,34 @@ impl Strategy {
             action += 1;
         }
         action - 1
+    }
+
+    pub fn get_strategy(&mut self, playing: bool) -> Vec<f64> {
+        self.calculate_play_strategy(playing);
+        self.current_strategy.clone()
+    }
+
+    pub fn calculate_play_strategy(&mut self, playing: bool) {
+        if !playing || self.play_strategy_calculated {
+            return;
+        }
+        let mut normalizing_sum = 0.0;
+        
+        for r in 0..self.actions {
+            normalizing_sum += self.strategy_sum[r];
+        }
+
+        if normalizing_sum > 0.0 {
+            for a in 0..self.actions {            
+                self.current_strategy[a] = self.strategy_sum[a] / normalizing_sum;
+            }
+        } else {
+            // If the normalizing sum is <= 0, then we have to assign equal probability to all actions
+            for a in 0..self.actions {
+                self.current_strategy[a] = 1.0 / self.actions as f64;
+            }
+        };
+
+        self.play_strategy_calculated = true;
     }
 }

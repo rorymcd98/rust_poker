@@ -20,7 +20,13 @@ pub fn validate_history(history: &Vec<Action>) {
         _ => panic!("Second action should be a deal: {:?}", history),
     }
 
-    let mut first_call_or_bet = true;
+    if history.len() < 3 {
+        panic!("Not enough actions in history: {:?}", history);
+    }
+
+    if history.len() > 3 && history[2].is_checkfold() {
+        panic!("SB preflop checkfold should be impossible: {:?}", history);
+    }
 
     let mut prev = history[1].clone();
     let mut prev_prev = history[0].clone();
@@ -87,16 +93,11 @@ pub fn validate_history(history: &Vec<Action>) {
                 }
             },
             Action::Call => {
-                if prev.is_checkfold() && !first_call_or_bet {
-                    panic!("Call after the preflop edge: {:?}", history);
-                }
-                first_call_or_bet = false;
                 if prev.is_call() {
                     panic!("Double call: {:?}", history);
                 }
             },
             Action::Bet => {
-                first_call_or_bet = false;
                 bets_this_turn += 1;
                 if bets_this_turn > 4 {
                     panic!("Too many bets this turn: {:?}", history);

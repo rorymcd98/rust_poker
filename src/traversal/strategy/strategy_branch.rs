@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, thread::panicking};
 use crate::traversal::action::Action;
 
 use super::strategy::Strategy;
@@ -17,8 +17,20 @@ impl StrategyBranch {
         }
     }
 
+    pub fn get_strategy(&mut self, info_set: InfoNode) -> &mut Strategy {
+        self.map.get_mut(&info_set).expect("Strategy not found")
+    }
+
     pub fn get_or_create_strategy(&mut self, info_set: InfoNode, actions: usize) -> &mut Strategy {
         self.map.entry(info_set).or_insert(Strategy::new(actions))
+    }
+
+    pub fn print_stats(&self) {
+        let mut size_in_mb = 0;
+        for (info_set, strategy) in self.map.iter() {
+            size_in_mb += std::mem::size_of_val(info_set) + std::mem::size_of_val(strategy);
+        }
+        println!("Strategy branch, elements: {} size: {} MB", self.map.len(), size_in_mb / 1024 / 1024);
     }
 
     // TODO - implement serialisation of the strategy branch into two streams

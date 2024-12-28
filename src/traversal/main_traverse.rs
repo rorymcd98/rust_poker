@@ -9,6 +9,7 @@ use crate::models::Card;
 use crate::models::Suit;
 use crate::models::Player;
 use crate::traversal::action::Action;
+use super::action_history::validate_history;
 use super::strategy::strategy_branch::InfoNode;
 use super::strategy::{strategy_map::StrategyMap, strategy_branch::StrategyBranch};
 use super::action_history::ActionHistory;
@@ -39,8 +40,6 @@ struct GameStateHelper {
     bets_this_round: Cell<u8>,
     winner: Option<Player>,
 }
-
-
 
 impl GameStateHelper {
     pub fn new(action_history: ActionHistory, nine_card_deal: NineCardDeal, small_blind_player: Player) -> GameStateHelper {
@@ -106,12 +105,17 @@ impl GameStateHelper {
     pub fn check_round_terminal(&self) -> TerminalState {
         let action_history = &self.action_history.borrow().history;
         let last_two_actions = &action_history[action_history.len() - 2..];
+        
         let terminal_state = match last_two_actions {
-            [Action::CheckFold, Action::CheckFold] => TerminalState::Showdown,
-            [Action::Call, Action::CheckFold] => TerminalState::RoundOver,
             [Action::Bet, Action::CheckFold] => TerminalState::Fold,
-            [Action::Call, Action::Call] => panic!("Invalid state - should not have two calls in a row {:?}", &self.action_history.borrow().history), 
+            [Action::Call, Action::CheckFold] => TerminalState::RoundOver,
+            [Action::CheckFold, Action::CheckFold] => TerminalState::Showdown,
             [Action::Bet, Action::Call] => TerminalState::Showdown,
+            [Action::Call, Action::Call] => panic!("Invalid state - should not have two calls in a row {:?}", &self.action_history.borrow().history), 
+            [Action::Deal(_), Action::CheckFold] => match action_history.len() { // TODO - this might not be performant
+                3 => TerminalState::Fold,
+                _ => TerminalState::None,
+            },
             _ => TerminalState::None,
         };
 
@@ -130,6 +134,7 @@ impl GameStateHelper {
         }
     }
 
+    // If we're at shodown, we lose our pot, or gain the opponent's pot
     fn evaluate_showdown(&self) -> f64 {
         // validate_history(&self.action_history.borrow().history);
         match self.winner {
@@ -139,10 +144,12 @@ impl GameStateHelper {
         }
     }
 
+    // If we're at fold, the 'current player' has just folded, so the traverser should get their pot
     fn evaluate_terminal_fold(&self) -> f64 {
+        // validate_history(&self.action_history.borrow().history);
         match self.current_player.get() {
-            Player::Traverser => -(self.traverser_pot.get() as f64),
-            Player::Opponent => self.opponent_pot.get() as f64,
+            Player::Traverser => self.traverser_pot.get() as f64,
+            Player::Opponent => -(self.opponent_pot.get() as f64),
         }
     }
 
@@ -160,7 +167,7 @@ impl GameStateHelper {
     }
 
     pub fn unbet(&self) {
-        //println!("Bets this round {}", self.bets_this_round.get());
+        println!("Just unbet");
         self.bets_this_round.set(self.bets_this_round.get() - 1);
         self.action_history.borrow_mut().history.pop();
         match self.current_player.get() {
@@ -182,15 +189,8 @@ impl GameStateHelper {
 
     fn call_or_bet(&self) {
         match self.bets_this_round.get() {
-            0 => self.bet(),
+            0 => self.bet(), // Handles the preflop edge case, and the start of betting rounds
             _ => self.call(),
-        }
-    }
-
-    fn uncall_or_unbet(&self, previous_pot: u8, previous_bets: u8) {
-        match previous_bets {
-            0 => self.unbet(),
-            _ => self.uncall(previous_pot),
         }
     }
 
@@ -206,9 +206,10 @@ impl GameStateHelper {
         };
     }
 
-    pub fn uncall(&self, previous_pot: u8) {
+    // Set the state back to a previous action
+    pub fn undo(&self, acting_player: Player, previous_pot: u8, previous_bets: u8) {
         self.action_history.borrow_mut().history.pop();
-        match self.current_player.get() {
+        match acting_player {
             Player::Traverser => {
                 self.traverser_pot.set(previous_pot);
             },
@@ -216,14 +217,12 @@ impl GameStateHelper {
                 self.opponent_pot.set(previous_pot);
             },
         };
+        self.bets_this_round.set(previous_bets);
+        self.current_player.set(acting_player);
     }
 
     pub fn checkfold(&self) {
         self.action_history.borrow_mut().history.push(Action::CheckFold);
-    }
-
-    pub fn uncheckfold(&self) {
-        self.action_history.borrow_mut().history.pop();
     }
 
     // implement deal and undeal
@@ -235,6 +234,8 @@ impl GameStateHelper {
         self.bets_this_round.set(0);
         self.set_current_player_to_big_blind();
     }
+
+    // pub fn undo
 
     pub fn undeal(&self, previous_bets: u8, previous_player: Player) {
         self.action_history.borrow_mut().history.pop();
@@ -263,7 +264,9 @@ impl GameStateHelper {
     }
 }
 
-const ITERATIONS: usize = 10_000;
+const TRAIN_ITERATIONS: usize = 10000;
+const PLAY_ITERATIONS: usize = 1000;
+const SUBPLAY_ITERATIONS: usize = 1000;
 const NUM_THREADS: usize = 12;
 
 pub struct TreeTraverser {
@@ -279,49 +282,96 @@ impl TreeTraverser {
         }
     }
 
-    fn spawn_thread_work(combo_chunk: Vec<(Card, Card)>) -> JoinHandle<(f64, (Card, Card))> {
+    fn spawn_thread_work(combo_chunk: Vec<(Card, Card)>) -> JoinHandle<(f64, f64, (Card, Card), f64, f64, (Card, Card))> {
         thread::spawn(move ||{
             let mut highest_so_far = 0.0;
+            let mut highest_so_far_small_blind = 0.0;
+            let mut lowest_so_far = 1.0;
+            let mut lowest_so_far_small_blind = 1.0;
             let mut highest_combo = (Card::new(Suit::Spades, Rank::Two), Card::new(Suit::Spades, Rank::Two));
+            let mut lowest_combo = (Card::new(Suit::Spades, Rank::Two), Card::new(Suit::Spades, Rank::Two));
 
             let players = [Player::Traverser, Player::Opponent];
             for card_combo in combo_chunk {
+                let card_combo_print = card_combo.clone();
                 for player in &players { // Alternate between who is small blind
-                    let mut average_utility = 0.0;
-                    let card_combo_print = card_combo.clone();
                     println!("Starting card combo {:?}", card_combo_print);
                     let mut strategy_branch = StrategyBranch::new();
                     let action_history = &mut ActionHistory::new(vec![]); // TODO - optimise this
                     let traverser_cards = [card_combo.0, card_combo.1];
                     action_history.history.push(Action::Deal(traverser_cards[0].clone()));
                     action_history.history.push(Action::Deal(traverser_cards[1].clone()));
-                    for iteration in 1..ITERATIONS { // Iter must start at 1
+                    for iteration in 1..=TRAIN_ITERATIONS { // Iter must start at 1
                         assert!(action_history.history.len() == 2);
                         let deal = Card::new_random_9_card_game_with(traverser_cards[0], traverser_cards[1]);
                 
                         let game_state = GameStateHelper::new(action_history.clone(), deal, player.clone());
                         let mut branch_traverser = BranchTraverser::new(strategy_branch, game_state, iteration);
                 
-                        let result= branch_traverser.begin_traversal();
+                        let result= branch_traverser.begin_traversal(false);
+                        strategy_branch = result.1;
+                    }
+                    println!("Finished training combo {:?}", card_combo_print);
+                    strategy_branch.print_stats();
+
+                    let mut average_utility = 0.0;
+
+                    for iteration in 1..PLAY_ITERATIONS { // Iter must start at 1
+                        let deal = Card::new_random_9_card_game_with(traverser_cards[0], traverser_cards[1]);
+                
+                        let game_state = GameStateHelper::new(action_history.clone(), deal, player.clone());
+                        let mut branch_traverser = BranchTraverser::new(strategy_branch, game_state, iteration);
+                
+                        let result= branch_traverser.begin_traversal(true);
                         strategy_branch = result.1;
                         average_utility += result.0;
                     }
-                    average_utility /= ITERATIONS as f64;
 
-                    if average_utility > highest_so_far {
-                        highest_so_far = average_utility;
-                        highest_combo = card_combo_print;
+                    println!("Finished playing combo {:?}", card_combo_print);
+                    strategy_branch.print_stats();
+
+
+                    average_utility /= TRAIN_ITERATIONS as f64;
+
+                    match player {
+                        Player::Opponent => {
+                            if average_utility > highest_so_far_small_blind {
+                                highest_so_far_small_blind = average_utility;
+                            }
+                            if average_utility < lowest_so_far_small_blind {
+                                println!("New lowest small blind {:?}", average_utility);
+                                lowest_so_far_small_blind = average_utility;
+                                lowest_combo = card_combo_print;
+                            }
+                        },
+                        Player::Traverser => {
+                            if average_utility > highest_so_far {
+                                highest_so_far = average_utility;
+                                highest_combo = card_combo_print;
+                            }
+                            if average_utility < lowest_so_far {
+                                lowest_so_far = average_utility;
+                            }
+                        }
                     }
                 }
             }
-            (highest_so_far, highest_combo)
+            (highest_so_far, highest_so_far_small_blind, highest_combo, lowest_so_far, lowest_so_far_small_blind, lowest_combo)
         })
     }
 
     pub fn begin_tree_traversal(self){
         let mut highest_so_far = 0.0;
+        let mut highest_so_far_small_blind = 0.0;
         let mut highest_combo = (Card::new(Suit::Spades, Rank::Two), Card::new(Suit::Spades, Rank::Two));
+        
+        let mut lowest_so_far = 1.0;
+        let mut lowest_so_far_small_blind = 1.0;
+        let mut lowest_combo = (Card::new(Suit::Spades, Rank::Two), Card::new(Suit::Spades, Rank::Two));
+
         let card_combos = Card::all_suited_combos(Suit::Spades).collect_vec();
+        // let card_combos = vec![(Card::new(Suit::Spades, Rank::Two), Card::new(Suit::Clubs, Rank::Seven))];
+        // let card_combos = vec![(Card::new(Suit::Spades, Rank::Two), Card::new(Suit::Clubs, Rank::Seven))];
         let chunk_size = card_combos.len() / NUM_THREADS;
         let card_combos = Arc::new(card_combos);
         let card_combos_chunks: Vec<_> = card_combos.chunks(chunk_size).collect();
@@ -333,13 +383,20 @@ impl TreeTraverser {
 
         for handle in handles {
             let res = handle.join().unwrap();
-            if res.0 > highest_so_far {
+            if res.1 > highest_so_far {
                 highest_so_far = res.0;
-                highest_combo = res.1;
+                highest_so_far_small_blind = res.1;
+                highest_combo = res.2;
+            }
+            if res.3 < lowest_so_far {
+                lowest_so_far = res.3;
+                lowest_so_far_small_blind = res.4;
+                lowest_combo = res.5;
             }
         }
 
-        println!("Highest average utility: {:?} with card combo {:?}", highest_so_far, highest_combo);
+        println!("Highest average utility: {:?}, {:?} (sb) with card combo {:?}", highest_so_far, highest_so_far_small_blind, highest_combo);
+        println!("Lowest average utility: {:?}, {:?} (sb) with card combo {:?}", lowest_so_far, lowest_so_far_small_blind, lowest_combo);
         }
 }
 
@@ -358,38 +415,38 @@ impl BranchTraverser {
         }
     }
     
-    pub fn begin_traversal(&mut self) -> (f64, StrategyBranch) {        
+    pub fn begin_traversal(&mut self, playing: bool) -> (f64, StrategyBranch) {        
         self.game_state.set_current_player_to_small_blind();
-        let utility = self.traverse_action();
+        let utility = self.traverse_action(playing);
         (utility, self.strategy_branch.take())
     }
 
-    fn traverse_action(&self) -> f64 {
+    fn traverse_action(&self, playing: bool) -> f64 {
         match self.game_state.check_round_terminal() {
             TerminalState::Showdown => return self.game_state.evaluate_showdown(),
             TerminalState::Fold => return self.game_state.evaluate_terminal_fold(),
             TerminalState::RoundOver => {
                 if self.game_state.is_preflop() {
-                    return self.traverse_flop();
+                    return self.traverse_flop(playing);
                 }
-                return self.traverse_deal();
+                return self.traverse_deal(playing);
             }
             TerminalState::None => (),
         };
 
         let info_node_key = self.game_state.serialise_history_with_current_player();
         let num_available_actions = self.game_state.get_num_available_actions() as usize;
-        let strategy = {
-            let mut strategy_branch = self.strategy_branch.borrow_mut();
-            strategy_branch.get_or_create_strategy(info_node_key.clone(), num_available_actions).clone()
-        };
 
         let pot_before_action = self.game_state.get_current_player_pot();
         let bets_before_action = self.game_state.bets_this_round.get();
         let previous_player = self.game_state.current_player.get();
 
         if self.game_state.current_player.get().is_opponent() {
-            let sampled_action = strategy.sample_strategy();
+            let sampled_action = {
+                let mut strategy_branch = self.strategy_branch.borrow_mut();
+                let strategy = strategy_branch.get_or_create_strategy(info_node_key.clone(), num_available_actions);
+                strategy.sample_strategy(playing)
+            };
 
             match sampled_action {
                 0 => self.game_state.checkfold(),
@@ -400,21 +457,17 @@ impl BranchTraverser {
 
             self.game_state.switch_current_player();
             // Propagate up the randomly selected action multiplied by the chance of selecting it
-            let utility = self.traverse_action();
-
-            match sampled_action {
-                0 => self.game_state.uncheckfold(),
-                1 => self.game_state.uncall_or_unbet(pot_before_action, bets_before_action),
-                2 => self.game_state.unbet(),
-                _ => panic!("Invalid action"),
-            };
-
-            self.game_state.current_player.set(previous_player); // not neccessary but for clarity
-
+            let utility = self.traverse_action(playing);            
+            self.game_state.undo(previous_player, pot_before_action, bets_before_action);
             utility
         } else {
             let mut utility = 0.0;
             let mut utilities = vec![0.0; num_available_actions];
+            let current_strategy = {
+                let mut strategy_branch = self.strategy_branch.borrow_mut();
+                let strategy = strategy_branch.get_or_create_strategy(info_node_key.clone(), num_available_actions);
+                strategy.get_strategy(playing)
+            };
 
             for action in 0..num_available_actions {
                 let pot_before_action = self.game_state.get_current_player_pot();
@@ -425,43 +478,38 @@ impl BranchTraverser {
                     _ => panic!("Invalid action"),
                 };
                 self.game_state.switch_current_player();
-                utilities[action] = self.traverse_action() * strategy.current_strategy[action];
-
-                match action {
-                    0 => self.game_state.uncheckfold(),
-                    1 => self.game_state.uncall_or_unbet(pot_before_action, bets_before_action),
-                    2 => self.game_state.unbet(),
-                    _ => panic!("Invalid action"),
-                };
-    
-                self.game_state.current_player.set(previous_player);
+                utilities[action] = self.traverse_action(playing) * current_strategy[action];
+                self.game_state.undo(previous_player, pot_before_action, bets_before_action);
             }
             
             for action in 0..num_available_actions {
                 utility += utilities[action];
             }
-            let mut strategy_branch = self.strategy_branch.borrow_mut();
-            let strategy = strategy_branch.get_or_create_strategy(info_node_key, num_available_actions);
-            strategy.update_strategy(utility, utilities, self.iteration);
+            if !playing {
+                let mut strategy_branch = self.strategy_branch.borrow_mut();
+                let strategy = strategy_branch.get_strategy(info_node_key);
+                strategy.update_strategy(utility, utilities, self.iteration);
+            } 
+
             utility
         }
     }
     
 
-    fn traverse_flop(&self) -> f64 {
+    fn traverse_flop(&self, playing: bool) -> f64 {
         let previous_player = self.game_state.current_player.get();
         let previous_bets = self.game_state.bets_this_round.get();
         self.game_state.deal_flop();
-        let utility = self.traverse_action();
+        let utility = self.traverse_action(playing);
         self.game_state.undeal_flop(previous_bets, previous_player);
         utility
     }
 
-    fn traverse_deal(&self) -> f64 {
+    fn traverse_deal(&self, playing: bool) -> f64 {
         let previous_player = self.game_state.current_player.get();
         let previous_bets = self.game_state.bets_this_round.get();
         self.game_state.deal();
-        let utility = self.traverse_action();
+        let utility = self.traverse_action(playing);
         self.game_state.undeal(previous_bets, previous_player);
         utility
     }
