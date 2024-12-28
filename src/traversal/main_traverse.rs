@@ -9,13 +9,12 @@ use crate::models::Card;
 use crate::models::Suit;
 use crate::models::Player;
 use crate::traversal::action::Action;
-use super::action_history::validate_history;
 use super::strategy::strategy_branch::InfoNode;
 use super::strategy::{strategy_map::StrategyMap, strategy_branch::StrategyBranch};
 use super::action_history::ActionHistory;
 use std::cell::{Cell, RefCell};
 use std::thread;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::thread::JoinHandle;
 
 lazy_static! {
@@ -291,23 +290,21 @@ impl TreeTraverser {
                     let mut average_utility = 0.0;
                     let card_combo_print = card_combo.clone();
                     println!("Starting card combo {:?}", card_combo_print);
-                    for iteration in 0..ITERATIONS {
-                        let action_history = &mut ActionHistory::new(vec![]); // TODO - optimise this
-                        // This defines our branch - our hole cards and whether we're the traverser
-                        let traverser_cards = [card_combo.0, card_combo.1];
-                        let strategy_branch = StrategyBranch::new();
-                        
-                        action_history.history.push(Action::Deal(traverser_cards[0].clone()));
-                        action_history.history.push(Action::Deal(traverser_cards[1].clone()));
-                
+                    let mut strategy_branch = StrategyBranch::new();
+                    let action_history = &mut ActionHistory::new(vec![]); // TODO - optimise this
+                    let traverser_cards = [card_combo.0, card_combo.1];
+                    action_history.history.push(Action::Deal(traverser_cards[0].clone()));
+                    action_history.history.push(Action::Deal(traverser_cards[1].clone()));
+                    for iteration in 1..ITERATIONS { // Iter must start at 1
+                        assert!(action_history.history.len() == 2);
                         let deal = Card::new_random_9_card_game_with(traverser_cards[0], traverser_cards[1]);
                 
                         let game_state = GameStateHelper::new(action_history.clone(), deal, player.clone());
-                        let branch = strategy_branch;
-                        let strategy_branch = RefCell::new(branch);
                         let mut branch_traverser = BranchTraverser::new(strategy_branch, game_state, iteration);
                 
-                        average_utility += branch_traverser.begin_traversal();
+                        let result= branch_traverser.begin_traversal();
+                        strategy_branch = result.1;
+                        average_utility += result.0;
                     }
                     average_utility /= ITERATIONS as f64;
 
@@ -353,18 +350,18 @@ struct BranchTraverser {
 }
 
 impl BranchTraverser {
-    pub fn new(strategy_branch: RefCell<StrategyBranch>, game_state: GameStateHelper, iteration: usize) -> BranchTraverser {
+    pub fn new(strategy_branch: StrategyBranch, game_state: GameStateHelper, iteration: usize) -> BranchTraverser {
         BranchTraverser {
-            strategy_branch: strategy_branch,
+            strategy_branch: RefCell::new(strategy_branch),
             iteration,
             game_state,
         }
     }
-
-    pub fn begin_traversal(&mut self) -> f64 {        
+    
+    pub fn begin_traversal(&mut self) -> (f64, StrategyBranch) {        
         self.game_state.set_current_player_to_small_blind();
         let utility = self.traverse_action();
-        utility
+        (utility, self.strategy_branch.take())
     }
 
     fn traverse_action(&self) -> f64 {

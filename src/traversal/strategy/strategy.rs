@@ -36,7 +36,7 @@ impl Strategy {
         for a in 0..self.actions {
             self.regrets[a] += action_utilities[a] - strategy_utility;
         }
-        self.update_current_strategy();// TODO - How does the current strategy improve?
+        self.update_current_strategy();
         self.update_strategy_sum_iter(iter);
     }
 
@@ -59,10 +59,9 @@ impl Strategy {
                 self.current_strategy[a] = 1.0 / self.actions as f64;
             }
         };
-        //println!("sum of current strategy after update: {}", self.current_strategy.iter().sum::<f64>());
     }
 
-    /// Updates the current strategy, discounting earlier iterations and favouring later ones
+    // Updates the current strategy, discounting earlier iterations and favouring later ones
     fn update_strategy_sum_iter(&mut self, iter: usize) {
         // first update the strategy sum
         let iter = iter as f64;
@@ -72,7 +71,7 @@ impl Strategy {
             if current_strategy_sum > 0.0 {
                 let iter_coeff = iter.powf(ALPHA);
                 let factor = iter_coeff / (1.0 + iter_coeff);
-            self.strategy_sum[index] *= factor;
+                self.strategy_sum[index] *= factor;
             } else {
                 let iter_coeff = iter.powf(BETA);
                 let factor = iter_coeff / (1.0 + iter_coeff);
@@ -98,17 +97,3 @@ impl Strategy {
         action - 1
     }
 }
-
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-
-//     #[test]
-//     fn test_get_current_strategy_sum() {
-//         let mut strategy = Strategy::new(3);
-//         strategy.current_strategy = vec![0.2, 0.3, 0.5];
-//         let current_strategy = strategy;
-//         let sum: f64 = current_strategy.iter().sum();
-//         assert!((sum - 1.0).abs() < 1e-6, "Sum of strategy probabilities is not approximately 1.0");
-//     }
-// }

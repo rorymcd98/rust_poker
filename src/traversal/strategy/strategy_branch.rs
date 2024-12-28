@@ -5,6 +5,7 @@ use super::strategy::Strategy;
 
 pub type InfoNode = Vec<u8>;
 
+#[derive(Default)]
 pub struct StrategyBranch {
     map: HashMap<InfoNode, Strategy>,
 }
