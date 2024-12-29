@@ -195,12 +195,12 @@ impl  HandEvaluator for EvaluateHand {
             2,
         );
 
-        let res = match best_score_traverser.cmp(&best_score_opponent) {
+        
+        match best_score_traverser.cmp(&best_score_opponent) {
             std::cmp::Ordering::Greater => Some(Player::Traverser),
             std::cmp::Ordering::Less => Some(Player::Opponent),
             std::cmp::Ordering::Equal => None,
-        };
-        res
+        }
     }
 }
 

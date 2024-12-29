@@ -9,7 +9,7 @@ use crate::evaluate::evaluate_hand::{REMAINING_LOOKUP_PRODUCT};
 use super::remaining_hand_types::{classify_hand_type, evaluate_pair, evaluate_two_pair, evaluate_three_of_a_kind, evaluate_full_house, evaluate_four_of_a_kind, HandType};
 
 fn generate_all_hand_combos(num_cards: usize) -> Vec<Vec<Card>> {
-    let combos = (0..52).collect_vec().iter().combinations(num_cards).map(|combo| combo.into_iter().cloned().map(|c| Card::from_int(c)).collect()).collect::<Vec<Vec<Card>>>();
+    let combos = (0..52).collect_vec().iter().combinations(num_cards).map(|combo| combo.into_iter().cloned().map(Card::from_int).collect()).collect::<Vec<Vec<Card>>>();
     combos
 }
 
@@ -31,7 +31,7 @@ pub fn generate_remaining_table() -> Vec<u16> {
 
     for hand in hands {
         let prime_product_identifier = hand_to_unique_prime_product(&hand);
-        let cards: Vec<Rank> = hand.iter().map(|r| r.rank.clone()).collect();
+        let cards: Vec<Rank> = hand.iter().map(|r| r.rank).collect();
         let hand_type: HandType = classify_hand_type(&hand);
         match hand_type {
             HandType::Pair(_) => {

@@ -7,7 +7,9 @@ use crate::thread_utils::with_rng;
 pub type NineCardDeal = [Card; 9];
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Default)]
 pub enum Suit {
+    #[default]
     Spades,
     Hearts,
     Diamonds,
@@ -54,14 +56,11 @@ impl Suit {
     }
 }
 
-impl Default for Suit {
-    fn default() -> Self {
-        Suit::Spades
-    }
-}
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Default)]
 pub enum Rank {
+    #[default]
     Two,
     Three,
     Four,
@@ -77,11 +76,6 @@ pub enum Rank {
     Ace,
 }
 
-impl Default for Rank {
-    fn default() -> Self {
-        Rank::Two
-    }
-}
 
 impl Display for Rank {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -360,7 +354,7 @@ impl Card {
  
     // TODO - move these dealing methods to a different class...
     pub fn all_suited_combos_vs_hole_cards(hole_cards: (Card, Card), suit: Suit) -> impl Iterator<Item = ((Card, Card), (Card, Card))> {
-        Self::all_suited_combos(suit).into_iter()
+        Self::all_suited_combos(suit)
             .map(move |(a, b)| (hole_cards, (a, b)))
     }
 
@@ -378,8 +372,8 @@ impl Card {
                 .into_iter()
                 .map(move |((a, b), (c, d))| {
                     (
-                        (Card::new(suit.clone(), Rank::from_int(a)), Card::new(suit.clone(), Rank::from_int(b))),
-                        (Card::new(suit.clone(), Rank::from_int(c)), Card::new(suit.clone(), Rank::from_int(d))),
+                        (Card::new(suit, Rank::from_int(a)), Card::new(suit, Rank::from_int(b))),
+                        (Card::new(suit, Rank::from_int(c)), Card::new(suit, Rank::from_int(d))),
                     )
                 })
             })
@@ -388,11 +382,11 @@ impl Card {
     pub fn all_suited_combos(suit: Suit) -> impl Iterator<Item = (Card, Card)> {
         (0..12).flat_map(move |first_rank| {
             ((first_rank+1)..13).map({
-                let suit = suit.clone();
+                let suit = suit;
                 move |second_rank| {
                     (
-                        Card::new(suit.clone(), Rank::from_int(first_rank)),
-                        Card::new(suit.clone(), Rank::from_int(second_rank)),
+                        Card::new(suit, Rank::from_int(first_rank)),
+                        Card::new(suit, Rank::from_int(second_rank)),
                     )
                 }
             })
@@ -402,12 +396,12 @@ impl Card {
     pub fn all_offsuit_combos(first_suit: Suit, second_suit: Suit) -> impl Iterator<Item = (Card, Card)> {
         (0..12).flat_map(move |first_rank| {
             ((first_rank+1)..13).map({
-                let first_suit = first_suit.clone();
-                let second_suit = second_suit.clone();
+                let first_suit = first_suit;
+                let second_suit = second_suit;
                 move |second_rank| {
                     (
-                        Card::new(first_suit.clone(), Rank::from_int(first_rank)),
-                        Card::new(second_suit.clone(), Rank::from_int(second_rank)),
+                        Card::new(first_suit, Rank::from_int(first_rank)),
+                        Card::new(second_suit, Rank::from_int(second_rank)),
                     )
                 }
             })

@@ -50,7 +50,7 @@ pub fn validate_history(history: &Vec<Action>) {
         match action {
             Action::Deal(card) => {
                 bets_this_turn = 0;
-                seen.push(card.clone());
+                seen.push(*card);
                 deal_count += 1;
                 match deal_count {
                     1 => {
@@ -114,7 +114,7 @@ pub fn validate_history(history: &Vec<Action>) {
     let seen_len = seen.len();
     let unique_seen_len = seen.iter().unique().collect::<Vec<_>>().len();
     if seen_len != unique_seen_len {
-        while seen.len() > 0 {
+        while !seen.is_empty() {
             let cand = seen.pop();
             if seen.contains(&cand.unwrap()) {
                 panic!("Duplicate card ({}) in history: {:?}", cand.unwrap(), history);
@@ -180,7 +180,7 @@ pub struct ActionHistoryByteStreamIterator<'a> {
 
 impl ActionHistoryByteStreamIterator<'_> {
 
-    pub fn new<'a>(byte_stream: &'a Vec<u8>) -> ActionHistoryByteStreamIterator<'a> {
+    pub fn new(byte_stream: &Vec<u8>) -> ActionHistoryByteStreamIterator<'_> {
         ActionHistoryByteStreamIterator {
             byte_stream_iterator: byte_stream.iter(),
         }
@@ -209,7 +209,7 @@ impl ActionHistoryByteStreamIterator<'_> {
     }
 }
 
-impl<'a> Iterator for ActionHistoryByteStreamIterator<'a> {
+impl Iterator for ActionHistoryByteStreamIterator<'_> {
 
     type Item = ActionHistory;
 
@@ -239,11 +239,11 @@ impl<'a> Iterator for ActionHistoryByteStreamIterator<'a> {
         history.push(second_action);
     
         while let Some(byte) = self.byte_stream_iterator.next() {
-            let action = Action::deserialise(&byte);
-            if Self::is_terminal_serialiastion(&history.last().unwrap(), &action) {
+            let action = Action::deserialise(byte);
+            if Self::is_terminal_serialiastion(history.last().unwrap(), &action) {
                 return Some(ActionHistory::new(history));
             } else if action.is_deal() {
-                if Self::is_terminal_serialiastion(&history.last().unwrap(), &action) {
+                if Self::is_terminal_serialiastion(history.last().unwrap(), &action) {
                     return Some(ActionHistory::new(history));
                 }
                 history.push(action);
@@ -262,7 +262,7 @@ impl<'a> Iterator for ActionHistoryByteStreamIterator<'a> {
             }
         }
     
-        while let Some(byte) = self.byte_stream_iterator.next() {
+        for byte in self.byte_stream_iterator.by_ref() {
             let action = Action::deserialise(byte);
             if Self::is_terminal_serialiastion(history.last().unwrap(), &action) {
                 return Some(ActionHistory::new(history));

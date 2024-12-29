@@ -28,7 +28,7 @@ impl Strategy {
             current_strategy: current_strategy.clone(),
             strategy_sum: current_strategy,
             regrets: vec![0.0; DEFAULT_ACTION_COUNT],
-            actions: actions,
+            actions,
             _play_strategy_calculated: false,
         }
     }

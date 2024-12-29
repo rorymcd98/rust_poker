@@ -1,4 +1,4 @@
-use crate::models::card::{Card, Rank, Suit};
+use crate::models::card::{Card, Rank};
 
 pub struct StraightAbstraction {
     //TODO - there will be noise here potentially (?) Q6 and J6  with the board being T987 - do we resolve the right strategy here? 
@@ -33,7 +33,7 @@ pub fn get_straight_abstraction(hole_cards: &[Card; 2], board_cards: &[Card]) ->
         }
     }
 
-    if candidate_hole_cards_indeces.len() == 0 {
+    if candidate_hole_cards_indeces.is_empty() {
         return None;
     }
 
@@ -53,11 +53,9 @@ pub fn get_straight_abstraction(hole_cards: &[Card; 2], board_cards: &[Card]) ->
                 in_window += 1;
                 consecutive += 1;
 
-                if candidate_hole_cards_indeces.iter().any(|&x| x <= i && x >= i.saturating_sub(4)) {
-                    if consecutive >= 3 {
-                        highest_straight_without_gutshot = consecutive;
-                        connected_high_card = i;
-                    }
+                if candidate_hole_cards_indeces.iter().any(|&x| x <= i && x >= i.saturating_sub(4)) && consecutive >= 3 {
+                    highest_straight_without_gutshot = consecutive;
+                    connected_high_card = i;
                 }
             } else {
                 consecutive = 0;
@@ -83,7 +81,7 @@ pub fn get_straight_abstraction(hole_cards: &[Card; 2], board_cards: &[Card]) ->
     }
 
     if highest_straight_with_gutshot > highest_straight_without_gutshot {
-        return Some(StraightAbstraction { bucketed_high_card: round_rank(gutshot_high_card), cards_in_straight: highest_straight_with_gutshot, requires_gutshot: true});
+        Some(StraightAbstraction { bucketed_high_card: round_rank(gutshot_high_card), cards_in_straight: highest_straight_with_gutshot, requires_gutshot: true})
     } else if highest_straight_without_gutshot > 0 {
         return Some(StraightAbstraction { bucketed_high_card: round_rank(connected_high_card), cards_in_straight: highest_straight_without_gutshot, requires_gutshot: false});
     } else {
@@ -254,7 +252,7 @@ pub fn get_connected_card_abstraction(hole_cards: &[Card; 2], board_cards: &[Car
     }
 
     if counts[2] > 0 {
-        return Some(ConnectedCardsAbstraction::FourOfAKind);
+        Some(ConnectedCardsAbstraction::FourOfAKind)
     } else if counts[1] > 0 && counts[0] > 0 {
         return Some(ConnectedCardsAbstraction::FullHouse(FullHouseAbstraction { high_card_is_house: highest_pair_rank > highest_toak_rank }));
     } else if counts[1] > 0 {

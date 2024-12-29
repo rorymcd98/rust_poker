@@ -156,13 +156,13 @@ fn evaluate_high_cards(hand: &Vec<Rank>, skip: &Vec<Rank>) -> u32 { // maximum p
         }
         prime_product |= rank.to_bit(); // keep this at 16 bits to check for int overflow
     }
-    prime_product as u32
+    prime_product
 }
 
 pub fn evaluate_pair(pair: HandType, cards: Vec<Rank>) -> u32 {
     match pair {
         HandType::Pair(rank) => {
-            return (rank.to_int() as u32) << 16 | evaluate_high_cards(&cards, &vec![rank]);
+            (rank.to_int() as u32) << 16 | evaluate_high_cards(&cards, &vec![rank])
         },
         _ => panic!("Unexepected hand type"),
     }
@@ -171,7 +171,7 @@ pub fn evaluate_pair(pair: HandType, cards: Vec<Rank>) -> u32 {
 pub fn evaluate_two_pair(two_pair: HandType, cards: Vec<Rank>) -> u32 {
     match two_pair {
         HandType::TwoPair(rank1, rank2) => {
-            return (rank1.to_int() as u32) << 24 | (rank2.to_int() as u32) << 16 | evaluate_high_cards(&cards, &vec![rank1, rank2]);
+            (rank1.to_int() as u32) << 24 | (rank2.to_int() as u32) << 16 | evaluate_high_cards(&cards, &vec![rank1, rank2])
         },
         _ => panic!("Unexepected hand type"),
     }
@@ -180,7 +180,7 @@ pub fn evaluate_two_pair(two_pair: HandType, cards: Vec<Rank>) -> u32 {
 pub fn evaluate_three_of_a_kind(pair: HandType, cards: Vec<Rank>) -> u32 {
     match pair {
         HandType::ThreeOfAKind(rank) => {
-            return (rank.to_int() as u32) << 16 | evaluate_high_cards(&cards, &vec![rank]);
+            (rank.to_int() as u32) << 16 | evaluate_high_cards(&cards, &vec![rank])
         },
         _ => panic!("Unexepected hand type"),
     }
@@ -189,7 +189,7 @@ pub fn evaluate_three_of_a_kind(pair: HandType, cards: Vec<Rank>) -> u32 {
 pub fn evaluate_full_house(full_house: HandType, cards: Vec<Rank>) -> u32 {
     match full_house {
         HandType::FullHouse(rank1, rank2) => {
-            return (rank1.to_int() as u32) << 24 | (rank2.to_int() as u32) << 16 | evaluate_high_cards(&cards, &vec![rank1, rank2]);
+            (rank1.to_int() as u32) << 24 | (rank2.to_int() as u32) << 16 | evaluate_high_cards(&cards, &vec![rank1, rank2])
         },
         _ => panic!("Unexepected hand type"),
     }
@@ -198,7 +198,7 @@ pub fn evaluate_full_house(full_house: HandType, cards: Vec<Rank>) -> u32 {
 pub fn evaluate_four_of_a_kind(pair: HandType, cards: Vec<Rank>) -> u32 {
     match pair {
         HandType::FourOfAKind(rank) => {
-            return (rank.to_int() as u32) << 16 | evaluate_high_cards(&cards, &vec![rank]);
+            (rank.to_int() as u32) << 16 | evaluate_high_cards(&cards, &vec![rank])
         },
         _ => panic!("Unexepected hand type"),
     }

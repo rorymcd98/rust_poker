@@ -1,7 +1,7 @@
-use std::{collections::HashMap, thread::panicking};
+use std::collections::HashMap;
 use rand::Rng;
 
-use crate::{thread_utils::with_rng, traversal::action_history::action::Action};
+use crate::thread_utils::with_rng;
 
 use super::strategy::Strategy;
 
@@ -55,15 +55,13 @@ pub struct StrategyBranchStreamIterator<'a> {
     byte_stream_iterator: std::slice::Iter<'a, f32>,
 }
 
-impl<'a> Iterator for StrategyBranchStreamIterator<'a> {
+impl Iterator for StrategyBranchStreamIterator<'_> {
 
     type Item = Strategy;
 
     fn next(&mut self) -> Option<Strategy> {
         let first = self.byte_stream_iterator.next();
-        if first.is_none() {
-            return None;
-        }
+        first?;
 
         // for now we can assume that every strategy is length 3
         let mut strategy = Strategy::new(3);
