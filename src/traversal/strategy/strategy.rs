@@ -34,7 +34,12 @@ impl Strategy {
     }
 
     // update the regrets
-    pub fn update_strategy(&mut self, strategy_utility: f32, action_utilities: Vec<f32>, iter: usize){
+    pub fn update_strategy(
+        &mut self,
+        strategy_utility: f32,
+        action_utilities: Vec<f32>,
+        iter: usize,
+    ) {
         for a in 0..self.actions {
             self.regrets[a] += action_utilities[a] - strategy_utility;
         }
@@ -45,17 +50,18 @@ impl Strategy {
     // Update the current strategy based on the instantenous regrets
     fn update_current_strategy(&mut self) {
         let mut normalizing_sum = 0.0;
-        
+
         for r in 0..self.actions {
             self.regrets[r] = f32::max(self.regrets[r], 0.0); // COnsider using K/[K + C - R(a)]
             normalizing_sum += self.regrets[r];
         }
 
         if normalizing_sum > 0.0 {
-            for a in 0..self.actions {            
+            for a in 0..self.actions {
                 self.current_strategy[a] = self.regrets[a] / normalizing_sum;
             }
-        } else { // TODO - ASSESS IF THIS IS EVER POSSIBLE?? surely not
+        } else {
+            // TODO - ASSESS IF THIS IS EVER POSSIBLE?? surely not
             // If the normalizing sum is <= 0, then we have to assign equal probability to all actions
             for a in 0..self.actions {
                 self.current_strategy[a] = 1.0 / self.actions as f32;
@@ -79,10 +85,10 @@ impl Strategy {
             //     let factor = iter_coeff / (iter_coeff + 1.0);
             //     self.strategy_sum[index] *= factor;
             // }
-            
+
             // // then add the new contribution calculated on this iteration
             // let contribution = self.current_strategy[index] * ((iter / (iter + 1.0)).powf(GAMMA)); // Weighted according to the iteration using DCRF
-            
+
             // self.strategy_sum[index] += contribution;
             self.strategy_sum[index] += self.current_strategy[index];
         }
@@ -119,7 +125,7 @@ impl Strategy {
         }
 
         if normalizing_sum > 0.0 {
-            for a in 0..self.actions {            
+            for a in 0..self.actions {
                 self.current_strategy[a] = self.strategy_sum[a] / normalizing_sum;
             }
         } else {

@@ -2,7 +2,9 @@ use generate_flush_table::generate_flushes_table;
 use generate_remaining_table::generate_remaining_table;
 use generate_unique_five_table::generate_unique_five_table;
 
-use crate::evaluate::evaluate_hand::{id_mask_to_string, prime_product_to_rank_string, DISTINCT_CARD_COMBOS};
+use crate::evaluate::evaluate_hand::{
+    id_mask_to_string, prime_product_to_rank_string, DISTINCT_CARD_COMBOS,
+};
 
 use super::*;
 
@@ -19,7 +21,10 @@ fn test_mutual_exclusivity() {
         }
         count += 1;
         if seen_rankings[*ranking as usize] != 0 {
-            panic!("Flush table has duplicate entries {}", id_mask_to_string((id as u32) << 12));
+            panic!(
+                "Flush table has duplicate entries {}",
+                id_mask_to_string((id as u32) << 12)
+            );
         }
         seen_rankings[*ranking as usize] += 1;
     }
@@ -30,7 +35,10 @@ fn test_mutual_exclusivity() {
         }
         count += 1;
         if seen_rankings[*id as usize] != 0 {
-            panic!("Fives table has duplicate entries {}", id_mask_to_string((*id as u32) << 12));
+            panic!(
+                "Fives table has duplicate entries {}",
+                id_mask_to_string((*id as u32) << 12)
+            );
         }
         seen_rankings[*id as usize] += 1;
     }
@@ -43,10 +51,14 @@ fn test_mutual_exclusivity() {
         }
         count += 1;
         if seen_rankings[*ranking as usize] != 0 {
-            panic!("Remaining table has duplicate entries {}, conflicts with rank {}", prime_product_to_rank_string(prime_product), ranking);
+            panic!(
+                "Remaining table has duplicate entries {}, conflicts with rank {}",
+                prime_product_to_rank_string(prime_product),
+                ranking
+            );
         }
         seen_rankings[*ranking as usize] += 1;
-}
+    }
 
     assert_eq!(count, DISTINCT_CARD_COMBOS);
 }

@@ -1,16 +1,24 @@
+use super::generate_flush_table::generate_unique_fives;
 use crate::evaluate::evaluate_hand::BIT_REP_LIMIT;
-use super::generate_flush_table::{generate_unique_fives};
 
 /// Generate a lookup table for unique five card hands that aren't flushes
 pub fn generate_unique_five_table() -> [u16; BIT_REP_LIMIT + 1] {
     const LOWER_TAKE_INDEX: usize = 0;
-    const UPPER_TAKE_INDEX: usize = 5853; // 1277 high cards + 2860 pairs + 858 two-pair + 858 ToaK 
-    generate_unique_fives(LOWER_TAKE_INDEX + 1, UPPER_TAKE_INDEX +1)
+    const UPPER_TAKE_INDEX: usize = 5853; // 1277 high cards + 2860 pairs + 858 two-pair + 858 ToaK
+    generate_unique_fives(LOWER_TAKE_INDEX + 1, UPPER_TAKE_INDEX + 1)
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{evaluate::{evaluate_hand::{hand_to_id, id_mask_to_string, unique_rank_mask}, generate_tables::generate_flush_table::{NON_STRAIGHT_COUNT, STRAIGHT_COUNT}}, models::card::Rank, models::card::Card, models::card::Suit};
+    use crate::{
+        evaluate::{
+            evaluate_hand::{hand_to_id, id_mask_to_string, unique_rank_mask},
+            generate_tables::generate_flush_table::{NON_STRAIGHT_COUNT, STRAIGHT_COUNT},
+        },
+        models::card::Card,
+        models::card::Rank,
+        models::card::Suit,
+    };
 
     use super::*;
     use itertools::Itertools;
@@ -29,7 +37,7 @@ mod tests {
 
     // A test to show the hand evaluation and board evaluation order doesn't mattter
     #[test]
-    fn order_invariance_hand(){
+    fn order_invariance_hand() {
         for _ in 0..1_000 {
             let hand = Card::new_random_cards(5);
             let first_eval = evaluate_fives(&hand);
@@ -64,7 +72,10 @@ mod tests {
             }
             count += 1;
             if seen_rankings[*ranking as usize] != 0 {
-                panic!("Flush table has duplicate entry {}", id_mask_to_string((*ranking as u32) << 12));
+                panic!(
+                    "Flush table has duplicate entry {}",
+                    id_mask_to_string((*ranking as u32) << 12)
+                );
             }
             seen_rankings[*ranking as usize] += 1;
         }

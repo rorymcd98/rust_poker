@@ -1,10 +1,16 @@
 use crate::models::card::Card;
 
-use super::{board_abstraction::BoardAbstraction, card_abstraction::{get_connected_card_abstraction, get_straight_abstraction, ConnectedCardsAbstraction, FlushAbstraction, StraightAbstraction}};
+use super::{
+    board_abstraction::BoardAbstraction,
+    card_abstraction::{
+        get_connected_card_abstraction, get_straight_abstraction, ConnectedCardsAbstraction,
+        FlushAbstraction, StraightAbstraction,
+    },
+};
 
 pub type CardRoundAbstractionSerialised = Vec<u8>;
 
-pub struct CardRoundAbstraction { 
+pub struct CardRoundAbstraction {
     pub board_abstraction: BoardAbstraction,
     pub connected_cards_abstraction: Option<ConnectedCardsAbstraction>,
     pub straight_abstraction: Option<StraightAbstraction>,
@@ -22,7 +28,7 @@ impl CardRoundAbstraction {
             board_abstraction,
             connected_cards_abstraction,
             straight_abstraction,
-            flush_abstraction
+            flush_abstraction,
         }
     }
 

@@ -1,11 +1,11 @@
-use std::collections::HashMap;
 use crate::evaluate::evaluate_hand::hand_to_id;
 use crate::evaluate::evaluate_hand::unique_rank_mask;
+use crate::evaluate::evaluate_hand::BIT_REP_LIMIT;
 use crate::models::card::Rank;
 use crate::models::Card;
 use crate::models::Suit;
 use itertools::Itertools;
-use crate::evaluate::evaluate_hand::BIT_REP_LIMIT;
+use std::collections::HashMap;
 
 pub const NON_STRAIGHT_COUNT: usize = 1277; // The number of hands consisting of 5 unique cards which are not straights
 pub const STRAIGHT_COUNT: usize = 10;
@@ -44,9 +44,13 @@ mod uniques_generation_test {
         for hand in combos {
             let hand_id = hand_to_id(&hand);
             let unique_hand_mask = unique_rank_mask(&hand_id);
-            assert!(!seen.contains(&unique_hand_mask), "Duplicate hand found, {:?}", hand);
+            assert!(
+                !seen.contains(&unique_hand_mask),
+                "Duplicate hand found, {:?}",
+                hand
+            );
             seen.insert(unique_hand_mask);
-        };
+        }
     }
 }
 
@@ -79,7 +83,7 @@ fn evaluate_straight(hand: &Vec<Card>) -> u32 {
     }
     // if the prod is 0 then it means we have a 2, check for an Ace
     if prod == 0 && hand.iter().any(|card| card.rank == Rank::Ace) {
-        return 0
+        return 0;
     }
 
     prod + 1
@@ -139,16 +143,76 @@ mod straight_test {
 
     #[test]
     fn test_straight_eval() {
-        let straight1 = vec![Card::new(Suit::random(), Rank::Ace), Card::new(Suit::random(), Rank::Two),Card::new(Suit::random(), Rank::Three),Card::new(Suit::random(), Rank::Four),Card::new(Suit::random(), Rank::Five)];
-        let straight2 = vec![Card::new(Suit::random(), Rank::Two), Card::new(Suit::random(), Rank::Three),Card::new(Suit::random(), Rank::Four),Card::new(Suit::random(), Rank::Five),Card::new(Suit::random(), Rank::Six)];
-        let straight3 = vec![Card::new(Suit::random(), Rank::Three), Card::new(Suit::random(), Rank::Four),Card::new(Suit::random(), Rank::Five),Card::new(Suit::random(), Rank::Six),Card::new(Suit::random(), Rank::Seven)];
-        let straight4 = vec![Card::new(Suit::random(), Rank::Four), Card::new(Suit::random(), Rank::Five),Card::new(Suit::random(), Rank::Six),Card::new(Suit::random(), Rank::Seven),Card::new(Suit::random(), Rank::Eight)];
-        let straight5 = vec![Card::new(Suit::random(), Rank::Five), Card::new(Suit::random(), Rank::Six),Card::new(Suit::random(), Rank::Seven),Card::new(Suit::random(), Rank::Eight),Card::new(Suit::random(), Rank::Nine)];
-        let straight6 = vec![Card::new(Suit::random(), Rank::Six), Card::new(Suit::random(), Rank::Seven),Card::new(Suit::random(), Rank::Eight),Card::new(Suit::random(), Rank::Nine),Card::new(Suit::random(), Rank::Ten)];
-        let straight7 = vec![Card::new(Suit::random(), Rank::Seven), Card::new(Suit::random(), Rank::Eight),Card::new(Suit::random(), Rank::Nine),Card::new(Suit::random(), Rank::Ten),Card::new(Suit::random(), Rank::Jack)];
-        let straight8 = vec![Card::new(Suit::random(), Rank::Eight), Card::new(Suit::random(), Rank::Nine),Card::new(Suit::random(), Rank::Ten),Card::new(Suit::random(), Rank::Jack),Card::new(Suit::random(), Rank::Queen)];
-        let straight9 = vec![Card::new(Suit::random(), Rank::Nine), Card::new(Suit::random(), Rank::Ten),Card::new(Suit::random(), Rank::Jack),Card::new(Suit::random(), Rank::Queen),Card::new(Suit::random(), Rank::King)];
-        let straight10 = vec![Card::new(Suit::random(), Rank::Ten), Card::new(Suit::random(), Rank::Jack),Card::new(Suit::random(), Rank::Queen),Card::new(Suit::random(), Rank::King),Card::new(Suit::random(), Rank::Ace)];
+        let straight1 = vec![
+            Card::new(Suit::random(), Rank::Ace),
+            Card::new(Suit::random(), Rank::Two),
+            Card::new(Suit::random(), Rank::Three),
+            Card::new(Suit::random(), Rank::Four),
+            Card::new(Suit::random(), Rank::Five),
+        ];
+        let straight2 = vec![
+            Card::new(Suit::random(), Rank::Two),
+            Card::new(Suit::random(), Rank::Three),
+            Card::new(Suit::random(), Rank::Four),
+            Card::new(Suit::random(), Rank::Five),
+            Card::new(Suit::random(), Rank::Six),
+        ];
+        let straight3 = vec![
+            Card::new(Suit::random(), Rank::Three),
+            Card::new(Suit::random(), Rank::Four),
+            Card::new(Suit::random(), Rank::Five),
+            Card::new(Suit::random(), Rank::Six),
+            Card::new(Suit::random(), Rank::Seven),
+        ];
+        let straight4 = vec![
+            Card::new(Suit::random(), Rank::Four),
+            Card::new(Suit::random(), Rank::Five),
+            Card::new(Suit::random(), Rank::Six),
+            Card::new(Suit::random(), Rank::Seven),
+            Card::new(Suit::random(), Rank::Eight),
+        ];
+        let straight5 = vec![
+            Card::new(Suit::random(), Rank::Five),
+            Card::new(Suit::random(), Rank::Six),
+            Card::new(Suit::random(), Rank::Seven),
+            Card::new(Suit::random(), Rank::Eight),
+            Card::new(Suit::random(), Rank::Nine),
+        ];
+        let straight6 = vec![
+            Card::new(Suit::random(), Rank::Six),
+            Card::new(Suit::random(), Rank::Seven),
+            Card::new(Suit::random(), Rank::Eight),
+            Card::new(Suit::random(), Rank::Nine),
+            Card::new(Suit::random(), Rank::Ten),
+        ];
+        let straight7 = vec![
+            Card::new(Suit::random(), Rank::Seven),
+            Card::new(Suit::random(), Rank::Eight),
+            Card::new(Suit::random(), Rank::Nine),
+            Card::new(Suit::random(), Rank::Ten),
+            Card::new(Suit::random(), Rank::Jack),
+        ];
+        let straight8 = vec![
+            Card::new(Suit::random(), Rank::Eight),
+            Card::new(Suit::random(), Rank::Nine),
+            Card::new(Suit::random(), Rank::Ten),
+            Card::new(Suit::random(), Rank::Jack),
+            Card::new(Suit::random(), Rank::Queen),
+        ];
+        let straight9 = vec![
+            Card::new(Suit::random(), Rank::Nine),
+            Card::new(Suit::random(), Rank::Ten),
+            Card::new(Suit::random(), Rank::Jack),
+            Card::new(Suit::random(), Rank::Queen),
+            Card::new(Suit::random(), Rank::King),
+        ];
+        let straight10 = vec![
+            Card::new(Suit::random(), Rank::Ten),
+            Card::new(Suit::random(), Rank::Jack),
+            Card::new(Suit::random(), Rank::Queen),
+            Card::new(Suit::random(), Rank::King),
+            Card::new(Suit::random(), Rank::Ace),
+        ];
         // assert the evaluation of each one is greater than the last
         assert!(evaluate_straight(&straight1) < evaluate_straight(&straight2));
         assert!(evaluate_straight(&straight2) < evaluate_straight(&straight3));
@@ -162,8 +226,10 @@ mod straight_test {
     }
 }
 
-
-pub fn generate_unique_fives(lower_take_index: usize, upper_take_index: usize) -> [u16; BIT_REP_LIMIT + 1] {
+pub fn generate_unique_fives(
+    lower_take_index: usize,
+    upper_take_index: usize,
+) -> [u16; BIT_REP_LIMIT + 1] {
     let mut lower_take_set = HashMap::<u16, u32>::new();
     let mut upper_take_set = HashMap::<u16, u32>::new();
 
@@ -173,17 +239,17 @@ pub fn generate_unique_fives(lower_take_index: usize, upper_take_index: usize) -
 
         match is_straight(&hand) {
             false => {
-            if lower_take_set.contains_key(&rank_mask) {
-                panic!("Duplicate entry found in lower_take_set: {:?}", hand);
+                if lower_take_set.contains_key(&rank_mask) {
+                    panic!("Duplicate entry found in lower_take_set: {:?}", hand);
+                }
+                lower_take_set.insert(rank_mask, rank_mask as u32)
             }
-            lower_take_set.insert(rank_mask, rank_mask as u32)
-            },
             true => {
-            if upper_take_set.contains_key(&rank_mask) {
-                panic!("Duplicate entry found in upper_take_set: {:?}", hand);
+                if upper_take_set.contains_key(&rank_mask) {
+                    panic!("Duplicate entry found in upper_take_set: {:?}", hand);
+                }
+                upper_take_set.insert(rank_mask, evaluate_straight(&hand))
             }
-            upper_take_set.insert(rank_mask, evaluate_straight(&hand))
-            },
         };
     }
 
@@ -232,10 +298,9 @@ mod flush_tests {
         evaluation
     }
 
-
     // A test to show the hand evaluation and board evaluation order doesn't mattter
     #[test]
-    fn order_invariance_hand(){
+    fn order_invariance_hand() {
         for _ in 0..1_000 {
             let hand = Card::new_random_cards(5);
             let first_eval = evaluate_flush(&hand);
@@ -244,7 +309,6 @@ mod flush_tests {
             }
         }
     }
-
 
     fn compare_flushes(hand1: &Vec<Card>, hand2: &Vec<Card>, ord: std::cmp::Ordering) {
         if hand1.iter().unique().count() != 5 || hand2.iter().unique().count() != 5 {
@@ -271,7 +335,10 @@ mod flush_tests {
             }
             count += 1;
             if seen_rankings[*ranking as usize] != 0 {
-                panic!("Flush table has duplicate entry {}", id_mask_to_string((*ranking as u32) << 12));
+                panic!(
+                    "Flush table has duplicate entry {}",
+                    id_mask_to_string((*ranking as u32) << 12)
+                );
             }
             seen_rankings[*ranking as usize] += 1;
         }
@@ -411,10 +478,8 @@ mod flush_tests {
         assert_eq!(eval, 5864);
     }
 
-
     #[test]
     fn test_low_card_diff() {
-        
         let hand1 = vec![
             Card::new(Suit::random(), Rank::Three),
             Card::new(Suit::random(), Rank::Five),

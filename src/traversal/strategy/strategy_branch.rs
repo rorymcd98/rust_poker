@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use rand::Rng;
+use std::collections::HashMap;
 
 use crate::thread_utils::with_rng;
 
@@ -17,14 +17,18 @@ impl StrategyBranch {
         StrategyBranch {
             map: HashMap::new(),
         }
-        }
+    }
 
-        pub fn get_strategy(&mut self, mut info_set: InfoNode) -> &mut Strategy {
-            info_set.pop();
-            self.map.get_mut(&info_set).expect("Strategy not found")
-        }
+    pub fn get_strategy(&mut self, mut info_set: InfoNode) -> &mut Strategy {
+        info_set.pop();
+        self.map.get_mut(&info_set).expect("Strategy not found")
+    }
 
-    pub fn get_or_create_strategy(&mut self, mut info_set: InfoNode, actions: usize) -> &mut Strategy {
+    pub fn get_or_create_strategy(
+        &mut self,
+        mut info_set: InfoNode,
+        actions: usize,
+    ) -> &mut Strategy {
         info_set.pop();
         with_rng(|rng| {
             // if we hit < 0.01 we log whether the strategy was created or not
@@ -44,7 +48,11 @@ impl StrategyBranch {
         for (info_set, strategy) in self.map.iter() {
             size_in_mb += std::mem::size_of_val(info_set) + std::mem::size_of_val(strategy);
         }
-        println!("Strategy branch, elements: {} size: {} MB", self.map.len(), size_in_mb / 1024 / 1024);
+        println!(
+            "Strategy branch, elements: {} size: {} MB",
+            self.map.len(),
+            size_in_mb / 1024 / 1024
+        );
     }
 
     // TODO - implement serialisation of the strategy branch into two streams
@@ -56,7 +64,6 @@ pub struct StrategyBranchStreamIterator<'a> {
 }
 
 impl Iterator for StrategyBranchStreamIterator<'_> {
-
     type Item = Strategy;
 
     fn next(&mut self) -> Option<Strategy> {
@@ -71,7 +78,7 @@ impl Iterator for StrategyBranchStreamIterator<'_> {
             match self.byte_stream_iterator.next() {
                 Some(current_strategy) => {
                     strategy.current_strategy[i] = *current_strategy;
-                },
+                }
                 None => panic!("Not enough bytes to deserialise strategy"),
             }
         }
@@ -80,7 +87,7 @@ impl Iterator for StrategyBranchStreamIterator<'_> {
             match self.byte_stream_iterator.next() {
                 Some(current_strategy) => {
                     strategy.current_strategy[i] = *current_strategy;
-                },
+                }
                 None => panic!("Not enough bytes to deserialise strategy sum"),
             }
         }

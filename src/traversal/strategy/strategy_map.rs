@@ -1,6 +1,6 @@
-use std::collections::HashMap;
 use super::strategy_branch::InfoNode;
 use super::strategy_branch::StrategyBranch;
+use std::collections::HashMap;
 
 pub struct StrategyMap {
     map: HashMap<InfoNode, StrategyBranch>,

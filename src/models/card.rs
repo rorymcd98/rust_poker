@@ -1,29 +1,35 @@
+use crate::thread_utils::with_rng;
 use itertools::Itertools;
 use rand::Rng;
-use std::{fmt::{Display, Formatter}, hash::{Hash, Hasher}};
-use crate::thread_utils::with_rng;
+use std::{
+    fmt::{Display, Formatter},
+    hash::{Hash, Hasher},
+};
 
 // 2 for traverser, 2 for opponent, 5 for board
 pub type NineCardDeal = [Card; 9];
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-#[derive(Default)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Default)]
 pub enum Suit {
     #[default]
     Spades,
     Hearts,
     Diamonds,
-    Clubs,   
+    Clubs,
 }
 
 impl Display for Suit {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", match self {
-            Suit::Spades => "s",
-            Suit::Hearts => "h",
-            Suit::Diamonds => "d",
-            Suit::Clubs => "c",
-        })
+        write!(
+            f,
+            "{}",
+            match self {
+                Suit::Spades => "s",
+                Suit::Hearts => "h",
+                Suit::Diamonds => "d",
+                Suit::Clubs => "c",
+            }
+        )
     }
 }
 
@@ -37,7 +43,7 @@ impl Suit {
             _ => panic!("Invalid suit"),
         }
     }
-    
+
     pub fn to_int(&self) -> u8 {
         match self {
             Suit::Spades => 0,
@@ -56,9 +62,7 @@ impl Suit {
     }
 }
 
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-#[derive(Default)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Default)]
 pub enum Rank {
     #[default]
     Two,
@@ -76,24 +80,27 @@ pub enum Rank {
     Ace,
 }
 
-
 impl Display for Rank {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", match self {
-            Rank::Two => "2",
-            Rank::Three => "3",
-            Rank::Four => "4",
-            Rank::Five => "5",
-            Rank::Six => "6",
-            Rank::Seven => "7",
-            Rank::Eight => "8",
-            Rank::Nine => "9",
-            Rank::Ten => "T",
-            Rank::Jack => "J",
-            Rank::Queen => "Q",
-            Rank::King => "K",
-            Rank::Ace => "A",
-        })
+        write!(
+            f,
+            "{}",
+            match self {
+                Rank::Two => "2",
+                Rank::Three => "3",
+                Rank::Four => "4",
+                Rank::Five => "5",
+                Rank::Six => "6",
+                Rank::Seven => "7",
+                Rank::Eight => "8",
+                Rank::Nine => "9",
+                Rank::Ten => "T",
+                Rank::Jack => "J",
+                Rank::Queen => "Q",
+                Rank::King => "K",
+                Rank::Ace => "A",
+            }
+        )
     }
 }
 
@@ -171,9 +178,10 @@ impl Display for Card {
 }
 
 pub fn deal_string(deal: &NineCardDeal) -> String {
-    format!("P1 [{}, {}] P2 [{}, {}] Board [{}, {}, {}, {}, {}]",
-        deal[0], deal[1], deal[2], deal[3],
-        deal[4], deal[5], deal[6], deal[7], deal[8])
+    format!(
+        "P1 [{}, {}] P2 [{}, {}] Board [{}, {}, {}, {}, {}]",
+        deal[0], deal[1], deal[2], deal[3], deal[4], deal[5], deal[6], deal[7], deal[8]
+    )
 }
 
 pub fn cards_string(cards: &[Card]) -> String {
@@ -188,10 +196,7 @@ impl Hash for Card {
 
 impl Card {
     pub fn new(suit: Suit, rank: Rank) -> Card {
-        Card {
-            suit,
-            rank,
-        }
+        Card { suit, rank }
     }
 
     pub fn from_int(card_number: u8) -> Card {
@@ -219,7 +224,7 @@ impl Card {
     pub fn new_random_cards(num_cards: usize) -> Vec<Card> {
         let mut taken = [false; 52];
         let mut res = Vec::with_capacity(num_cards);
-        with_rng(|rng|
+        with_rng(|rng| {
             while res.len() < num_cards {
                 let card_int = rng.gen::<u8>() % 52;
                 if taken[card_int as usize] {
@@ -228,11 +233,16 @@ impl Card {
                 taken[card_int as usize] = true;
                 res.push(Card::from_int(card_int));
             }
-        );
+        });
         res
     }
 
-    pub fn new_random_9_card_game_with(card1: Card, card2: Card, card3: Card, card4: Card) -> NineCardDeal {
+    pub fn new_random_9_card_game_with(
+        card1: Card,
+        card2: Card,
+        card3: Card,
+        card4: Card,
+    ) -> NineCardDeal {
         let mut taken = [false; 52];
         let mut res = [Card::default(); 9];
         taken[card1.to_int() as usize] = true;
@@ -245,7 +255,7 @@ impl Card {
         res[3] = card4;
 
         let mut count = 4;
-        with_rng(|rng|
+        with_rng(|rng| {
             while count < 9 {
                 let card_int = rng.gen::<u8>() % 52;
                 if taken[card_int as usize] {
@@ -255,7 +265,7 @@ impl Card {
                 res[count] = Card::from_int(card_int);
                 count += 1;
             }
-        );
+        });
         res
     }
 
@@ -263,7 +273,7 @@ impl Card {
         let mut taken = [false; 52];
         let mut res = [Card::default(); 9];
         let mut count = 0;
-        with_rng(|rng|
+        with_rng(|rng| {
             while count < 9 {
                 let card_int = rng.gen::<u8>() % 52;
                 if taken[card_int as usize] {
@@ -273,7 +283,7 @@ impl Card {
                 res[count] = Card::from_int(card_int);
                 count += 1;
             }
-        );
+        });
         res
     }
 
@@ -289,7 +299,7 @@ impl Card {
             taken[card.to_int() as usize] = true;
         }
         let mut res = Vec::with_capacity(n);
-        with_rng(|rng|
+        with_rng(|rng| {
             while res.len() < n {
                 let card_int = (rng.gen::<u8>() % 52) as usize;
                 if taken[card_int] {
@@ -298,7 +308,7 @@ impl Card {
                 taken[card_int] = true;
                 res.push(Card::from_int(card_int as u8));
             }
-        );
+        });
         res
     }
 
@@ -307,16 +317,14 @@ impl Card {
         for card in existing_cards {
             taken[card.to_int() as usize] = true;
         }
-        with_rng(|rng|
-            loop {
-                let card_int = (rng.gen::<u8>() % 52) as usize;
-                if taken[card_int] {
-                    continue;
-                }
-                taken[card_int] = true;
-                return Card::from_int(card_int as u8);
+        with_rng(|rng| loop {
+            let card_int = (rng.gen::<u8>() % 52) as usize;
+            if taken[card_int] {
+                continue;
             }
-        )
+            taken[card_int] = true;
+            return Card::from_int(card_int as u8);
+        })
     }
 
     pub fn serialise(&self) -> u8 {
@@ -351,14 +359,18 @@ impl Card {
         let rank = Rank::from_int(serialised_card & 0b00001111);
         Card::new(suit, rank)
     }
- 
+
     // TODO - move these dealing methods to a different class...
-    pub fn all_suited_combos_vs_hole_cards(hole_cards: (Card, Card), suit: Suit) -> impl Iterator<Item = ((Card, Card), (Card, Card))> {
-        Self::all_suited_combos(suit)
-            .map(move |(a, b)| (hole_cards, (a, b)))
+    pub fn all_suited_combos_vs_hole_cards(
+        hole_cards: (Card, Card),
+        suit: Suit,
+    ) -> impl Iterator<Item = ((Card, Card), (Card, Card))> {
+        Self::all_suited_combos(suit).map(move |(a, b)| (hole_cards, (a, b)))
     }
 
-    pub fn all_suited_player_cards_combos(suit: Suit) -> impl Iterator<Item = ((Card, Card), (Card, Card))> {
+    pub fn all_suited_player_cards_combos(
+        suit: Suit,
+    ) -> impl Iterator<Item = ((Card, Card), (Card, Card))> {
         // Generate combinations of 4 ranks, then group them into pairs in different ways
         (0..13)
             .combinations(4) // All combinations of 4 ranks
@@ -372,16 +384,22 @@ impl Card {
                 .into_iter()
                 .map(move |((a, b), (c, d))| {
                     (
-                        (Card::new(suit, Rank::from_int(a)), Card::new(suit, Rank::from_int(b))),
-                        (Card::new(suit, Rank::from_int(c)), Card::new(suit, Rank::from_int(d))),
+                        (
+                            Card::new(suit, Rank::from_int(a)),
+                            Card::new(suit, Rank::from_int(b)),
+                        ),
+                        (
+                            Card::new(suit, Rank::from_int(c)),
+                            Card::new(suit, Rank::from_int(d)),
+                        ),
                     )
                 })
             })
     }
-    
+
     pub fn all_suited_combos(suit: Suit) -> impl Iterator<Item = (Card, Card)> {
         (0..12).flat_map(move |first_rank| {
-            ((first_rank+1)..13).map({
+            ((first_rank + 1)..13).map({
                 let suit = suit;
                 move |second_rank| {
                     (
@@ -393,9 +411,12 @@ impl Card {
         })
     }
 
-    pub fn all_offsuit_combos(first_suit: Suit, second_suit: Suit) -> impl Iterator<Item = (Card, Card)> {
+    pub fn all_offsuit_combos(
+        first_suit: Suit,
+        second_suit: Suit,
+    ) -> impl Iterator<Item = (Card, Card)> {
         (0..12).flat_map(move |first_rank| {
-            ((first_rank+1)..13).map({
+            ((first_rank + 1)..13).map({
                 let first_suit = first_suit;
                 let second_suit = second_suit;
                 move |second_rank| {
@@ -412,7 +433,7 @@ impl Card {
 impl Default for Card {
     fn default() -> Self {
         Card::new(Suit::Spades, Rank::Two)
-    }   
+    }
 }
 
 /// Conveniently, our serialisation function allows for sensible sorting of cards
@@ -430,9 +451,12 @@ impl Ord for Card {
 
 #[cfg(test)]
 mod tests {
-    use rstest::rstest;
-    use std::{collections::{HashMap, HashSet}, time::Instant};
     use super::*;
+    use rstest::rstest;
+    use std::{
+        collections::{HashMap, HashSet},
+        time::Instant,
+    };
 
     #[test]
     fn test_suit_from_int() {
@@ -537,7 +561,6 @@ mod tests {
         }
     }
 
-
     #[test]
     fn test_get_n_more_cards() {
         let existing_cards = Card::new_random_cards(5);
@@ -553,10 +576,18 @@ mod tests {
         let existing_cards = Card::new_random_cards(4);
         let start = Instant::now();
         for _ in 0..100_000 {
-            _ = Card::new_random_9_card_game_with(existing_cards[0], existing_cards[1], existing_cards[2], existing_cards[3]);
+            _ = Card::new_random_9_card_game_with(
+                existing_cards[0],
+                existing_cards[1],
+                existing_cards[2],
+                existing_cards[3],
+            );
         }
         let duration = start.elapsed();
-        assert!(duration.as_millis() < 500, "Performance test failed: took too long to generate cards");
+        assert!(
+            duration.as_millis() < 500,
+            "Performance test failed: took too long to generate cards"
+        );
     }
 
     #[test]
@@ -569,10 +600,12 @@ mod tests {
     }
 
     #[test]
-    fn all_suited_whole_card_combos(){
+    fn all_suited_whole_card_combos() {
         // are unique, there are 78 of them, they are all sorted, they are all the same suit
-        let combos = Card::all_suited_combos(Suit::Spades).into_iter().collect::<Vec<_>>();
-        assert_eq!(combos.len(), 12*13 /2);
+        let combos = Card::all_suited_combos(Suit::Spades)
+            .into_iter()
+            .collect::<Vec<_>>();
+        assert_eq!(combos.len(), 12 * 13 / 2);
         let mut seen = HashSet::new();
         for combo in combos {
             assert!(!seen.contains(&combo));
@@ -584,7 +617,7 @@ mod tests {
     }
 
     #[test]
-    fn all_suited_player_cards_combos(){
+    fn all_suited_player_cards_combos() {
         // are unique, there are 2145 of them, they are all sorted, they are all the same suit
         let combos = Card::all_suited_player_cards_combos(Suit::Spades).collect::<Vec<_>>();
         assert_eq!(combos.len(), 2145);
@@ -592,12 +625,12 @@ mod tests {
         for combo in combos {
             assert!(!seen.contains(&combo));
             seen.insert(combo);
-            assert_eq!(combo.0.0.suit, Suit::Spades);
-            assert_eq!(combo.0.1.suit, Suit::Spades);
-            assert_eq!(combo.1.0.suit, Suit::Spades);
-            assert_eq!(combo.1.1.suit, Suit::Spades);
-            assert!(combo.0.0.rank.to_int() < combo.0.1.rank.to_int());
-            assert!(combo.1.0.rank.to_int() < combo.1.1.rank.to_int());
+            assert_eq!(combo.0 .0.suit, Suit::Spades);
+            assert_eq!(combo.0 .1.suit, Suit::Spades);
+            assert_eq!(combo.1 .0.suit, Suit::Spades);
+            assert_eq!(combo.1 .1.suit, Suit::Spades);
+            assert!(combo.0 .0.rank.to_int() < combo.0 .1.rank.to_int());
+            assert!(combo.1 .0.rank.to_int() < combo.1 .1.rank.to_int());
         }
     }
 }

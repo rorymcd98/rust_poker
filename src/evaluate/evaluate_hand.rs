@@ -1,10 +1,9 @@
-
-use crate::models::card::NineCardDeal;
-use crate::models::Player;
-use crate::models::Card;
 use super::generate_tables::generate_flush_table::generate_flushes_table;
 use super::generate_tables::generate_remaining_table::generate_remaining_table;
 use super::generate_tables::generate_unique_five_table::generate_unique_five_table;
+use crate::models::card::NineCardDeal;
+use crate::models::Card;
+use crate::models::Player;
 
 pub type CardId = u32;
 pub const PRIME_MASK: u32 = 0b11111111;
@@ -13,7 +12,7 @@ pub const SUIT_MASK: u32 = 0b111100000000;
 // 7462 = all possible rank combinations (4 * (13 choose 5))
 pub const DISTINCT_CARD_COMBOS: usize = 7462;
 
-// 7937 = xxxAKQJTxxxxxxxx (+1) the bit pattern of a royal flush 
+// 7937 = xxxAKQJTxxxxxxxx (+1) the bit pattern of a royal flush
 // TODO - find a better name
 pub const BIT_REP_LIMIT: usize = 7937; // We often add 1 to this so that we can use the 0 index as a sentinel / null value
 
@@ -26,7 +25,7 @@ pub const REMAINING_LOOKUP_PRODUCT: usize = 104553157;
 pub fn card_to_id(card: &Card) -> CardId {
     let prime = card.rank.to_prime() as u32;
 
-    (card.rank.to_bit() << 12) | (card.suit.to_bit() <<  8) | prime
+    (card.rank.to_bit() << 12) | (card.suit.to_bit() << 8) | prime
 }
 
 pub fn id_mask_to_string(id: CardId) -> String {
@@ -70,7 +69,9 @@ fn rank_bits_to_string(rank_bits: u16) -> String {
 pub fn prime_product_to_rank_string(mut product: usize) -> String {
     let mut rank_string = String::new();
     let primes = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41];
-    let ranks = ["2", "3", "4", "5", "6", "7", "8", "9", "T", "J", "Q", "K", "A"];
+    let ranks = [
+        "2", "3", "4", "5", "6", "7", "8", "9", "T", "J", "Q", "K", "A",
+    ];
 
     while product > 1 {
         let mut found = false;
@@ -94,12 +95,14 @@ pub fn is_flush(cards: &[CardId; 5]) -> bool {
 }
 
 /// Get a representation of the ranks, the unique lookup table will tell us if this is unique
-pub fn unique_rank_mask(cards: &[CardId; 5]) -> usize {    
+pub fn unique_rank_mask(cards: &[CardId; 5]) -> usize {
     ((cards[0] | cards[1] | cards[2] | cards[3] | cards[4]) >> 12) as usize
 }
 
 pub fn hand_to_unique_prime_product(hand: &[Card]) -> usize {
-    hand.iter().map(|card| card.rank.to_prime() as usize).product()
+    hand.iter()
+        .map(|card| card.rank.to_prime() as usize)
+        .product()
 }
 
 trait HandLookup {
@@ -168,34 +171,36 @@ pub fn hand_to_id(hand: &[Card]) -> [CardId; 5] {
     ]
 }
 
-impl  HandEvaluator for EvaluateHand {
+impl HandEvaluator for EvaluateHand {
     fn evaluate(&self, cards: [Card; 5]) -> u16 {
         let card_ids = hand_to_id(&cards);
         let flush = is_flush(&card_ids);
         let unique_rank_representation = unique_rank_mask(&card_ids);
         if flush {
-            return self.hand_lookup.flush_evaluation(unique_rank_representation);
+            return self
+                .hand_lookup
+                .flush_evaluation(unique_rank_representation);
         }
-        let unique_lookup  =self.hand_lookup.unique_ranks_evaluation(unique_rank_representation);
+        let unique_lookup = self
+            .hand_lookup
+            .unique_ranks_evaluation(unique_rank_representation);
         if unique_lookup != 0 {
             return unique_lookup;
-        } 
-        
-        let prime_product = (card_ids[0] & PRIME_MASK) * (card_ids[1] & PRIME_MASK) * (card_ids[2] & PRIME_MASK) * (card_ids[3] & PRIME_MASK) * (card_ids[4] & PRIME_MASK);
-        self.hand_lookup.remaining_evaluation(prime_product as usize)
+        }
+
+        let prime_product = (card_ids[0] & PRIME_MASK)
+            * (card_ids[1] & PRIME_MASK)
+            * (card_ids[2] & PRIME_MASK)
+            * (card_ids[3] & PRIME_MASK)
+            * (card_ids[4] & PRIME_MASK);
+        self.hand_lookup
+            .remaining_evaluation(prime_product as usize)
     }
 
     fn evaluate_deal(&self, deal: NineCardDeal) -> Option<Player> {
-        let best_score_traverser = self.score_for_indices(
-            &deal,
-            0,
-        );
-        let best_score_opponent = self.score_for_indices(
-            &deal,
-            2,
-        );
+        let best_score_traverser = self.score_for_indices(&deal, 0);
+        let best_score_opponent = self.score_for_indices(&deal, 2);
 
-        
         match best_score_traverser.cmp(&best_score_opponent) {
             std::cmp::Ordering::Greater => Some(Player::Traverser),
             std::cmp::Ordering::Less => Some(Player::Opponent),
@@ -247,12 +252,14 @@ impl EvaluateHand {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::{
+        evaluate::generate_tables::remaining_hand_types::{classify_hand_type, HandType},
+        models::card::{Rank, Suit},
+    };
     use itertools::Itertools;
     use lazy_static::lazy_static;
-    use crate::{evaluate::generate_tables::remaining_hand_types::{classify_hand_type, HandType}, models::card::{Rank, Suit}};
-    use super::*;
     use rand::seq::SliceRandom;
-
 
     lazy_static! {
         static ref EVALUATOR: EvaluateHand = EvaluateHand::new();
@@ -277,7 +284,7 @@ mod tests {
     }
 
     #[test]
-    fn test_performance_9_card(){
+    fn test_performance_9_card() {
         _ = &*EVALUATOR;
         let hands: Vec<NineCardDeal> = (0..100).map(|_| Card::new_random_9_card_game()).collect();
         let start = std::time::Instant::now();
@@ -291,26 +298,32 @@ mod tests {
 
     // A test to show the hand evaluation and board evaluation order doesn't mattter
     #[test]
-    fn order_invariance_hand(){
+    fn order_invariance_hand() {
         for _ in 0..EVALS {
             let hand = Card::new_random_cards(5);
             let first_eval = EVALUATOR.evaluate([hand[0], hand[1], hand[2], hand[3], hand[4]]);
             for perm in hand.iter().permutations(5) {
-                assert_eq!(first_eval, EVALUATOR.evaluate([*perm[0], *perm[1], *perm[2], *perm[3], *perm[4]]));
+                assert_eq!(
+                    first_eval,
+                    EVALUATOR.evaluate([*perm[0], *perm[1], *perm[2], *perm[3], *perm[4]])
+                );
             }
         }
     }
 
     #[test]
-    fn order_invariance_nine_card_game(){
+    fn order_invariance_nine_card_game() {
         for _ in 0..EVALS {
             let game = Card::new_random_9_card_game();
             let first_eval = EVALUATOR.evaluate_deal(game);
             let mut rng = rand::thread_rng();
             for perm in game[4..9].iter().permutations(5) {
-                let mut game_perm = [game[0], game[1], game[2], game[3], *perm[0], *perm[1], *perm[2], *perm[3], *perm[4]];
+                let mut game_perm = [
+                    game[0], game[1], game[2], game[3], *perm[0], *perm[1], *perm[2], *perm[3],
+                    *perm[4],
+                ];
                 game_perm[0..2].shuffle(&mut rng);
-                game_perm[2..4].shuffle(&mut rng); 
+                game_perm[2..4].shuffle(&mut rng);
                 assert_eq!(first_eval, EVALUATOR.evaluate_deal(game_perm));
             }
         }

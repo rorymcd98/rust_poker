@@ -9,7 +9,7 @@ pub enum Action {
     CheckFold,
     Call,
     Bet, // if we want this to become no-limit this can take in a u32
-    Deal(Card)
+    Deal(Card),
 }
 
 impl Display for Action {
@@ -39,7 +39,7 @@ impl Action {
             Action::Deal(card) => card.serialise() | Self::DEAL_BYTE,
         }
     }
-    
+
     pub fn deserialise(byte: &u8) -> Action {
         match byte & Self::ACTION_MASK {
             Self::CHECKFOLD_BYTE => Action::CheckFold,
@@ -81,10 +81,13 @@ impl Action {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::card::{Card, Suit, Rank};
+    use crate::models::card::{Card, Rank, Suit};
     use rstest::rstest;
 
-    const TEST_CARD: Card = Card { suit: Suit::Hearts, rank: Rank::Two };
+    const TEST_CARD: Card = Card {
+        suit: Suit::Hearts,
+        rank: Rank::Two,
+    };
 
     #[test]
     fn test_round_trip_checkfold() {
@@ -129,7 +132,6 @@ mod tests {
         let byte = action.serialise();
         assert_eq!(Action::deserialise(&byte), action);
     }
-
 
     #[test]
     fn test_is_deal() {

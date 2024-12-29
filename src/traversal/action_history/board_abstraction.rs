@@ -1,5 +1,5 @@
-use crate::{evaluate::generate_tables::remaining_hand_types::HandType, models::card::Rank};
 use crate::models::card::Card;
+use crate::{evaluate::generate_tables::remaining_hand_types::HandType, models::card::Rank};
 pub struct BoardAbstraction {
     pub max_consecutive_cards: u8,
     pub max_suit_count: u8,
@@ -34,17 +34,17 @@ impl BoardAbstraction {
         }
 
         let hand_type = match connected_cards {
-            [1,0,0] => HandType::Pair(Rank::default()),
-            [2,0,0] => HandType::TwoPair(Rank::default(), Rank::default()),
-            [0,1,0] => HandType::ThreeOfAKind(Rank::default()),
-            [1,1,0] => HandType::FullHouse(Rank::default(), Rank::default()),
-            [0,0,1] => HandType::FourOfAKind(Rank::default()),
+            [1, 0, 0] => HandType::Pair(Rank::default()),
+            [2, 0, 0] => HandType::TwoPair(Rank::default(), Rank::default()),
+            [0, 1, 0] => HandType::ThreeOfAKind(Rank::default()),
+            [1, 1, 0] => HandType::FullHouse(Rank::default(), Rank::default()),
+            [0, 0, 1] => HandType::FourOfAKind(Rank::default()),
             _ => HandType::None,
         };
 
         BoardAbstraction {
             max_consecutive_cards,
-            max_suit_count : *suits.iter().max().unwrap(),
+            max_suit_count: *suits.iter().max().unwrap(),
             board_hand_type: hand_type,
         }
     }

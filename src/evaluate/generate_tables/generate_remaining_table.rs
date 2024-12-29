@@ -1,15 +1,23 @@
 use std::collections::HashMap;
 
+use crate::evaluate::evaluate_hand::REMAINING_LOOKUP_PRODUCT;
 use crate::*;
 use evaluate::evaluate_hand::hand_to_unique_prime_product;
 use itertools::Itertools;
 use models::card::{Card, Rank};
-use crate::evaluate::evaluate_hand::{REMAINING_LOOKUP_PRODUCT};
 
-use super::remaining_hand_types::{classify_hand_type, evaluate_pair, evaluate_two_pair, evaluate_three_of_a_kind, evaluate_full_house, evaluate_four_of_a_kind, HandType};
+use super::remaining_hand_types::{
+    classify_hand_type, evaluate_four_of_a_kind, evaluate_full_house, evaluate_pair,
+    evaluate_three_of_a_kind, evaluate_two_pair, HandType,
+};
 
 fn generate_all_hand_combos(num_cards: usize) -> Vec<Vec<Card>> {
-    let combos = (0..52).collect_vec().iter().combinations(num_cards).map(|combo| combo.into_iter().cloned().map(Card::from_int).collect()).collect::<Vec<Vec<Card>>>();
+    let combos = (0..52)
+        .collect_vec()
+        .iter()
+        .combinations(num_cards)
+        .map(|combo| combo.into_iter().cloned().map(Card::from_int).collect())
+        .collect::<Vec<Vec<Card>>>();
     combos
 }
 
@@ -36,24 +44,36 @@ pub fn generate_remaining_table() -> Vec<u16> {
         match hand_type {
             HandType::Pair(_) => {
                 pair_evaluations.insert(prime_product_identifier, evaluate_pair(hand_type, cards));
-            },
+            }
             HandType::TwoPair(_, _) => {
-                two_pair_evaluations.insert(prime_product_identifier, evaluate_two_pair(hand_type, cards));
-            },
+                two_pair_evaluations.insert(
+                    prime_product_identifier,
+                    evaluate_two_pair(hand_type, cards),
+                );
+            }
             HandType::ThreeOfAKind(_) => {
-                three_of_a_kind_evaluations.insert(prime_product_identifier, evaluate_three_of_a_kind(hand_type, cards));
-            },
+                three_of_a_kind_evaluations.insert(
+                    prime_product_identifier,
+                    evaluate_three_of_a_kind(hand_type, cards),
+                );
+            }
             HandType::FullHouse(_, _) => {
-                full_house_evaluations.insert(prime_product_identifier, evaluate_full_house(hand_type, cards));
-            },
+                full_house_evaluations.insert(
+                    prime_product_identifier,
+                    evaluate_full_house(hand_type, cards),
+                );
+            }
             HandType::FourOfAKind(_) => {
-                four_of_a_kind_evaluations.insert(prime_product_identifier, evaluate_four_of_a_kind(hand_type, cards));
-            },
+                four_of_a_kind_evaluations.insert(
+                    prime_product_identifier,
+                    evaluate_four_of_a_kind(hand_type, cards),
+                );
+            }
             HandType::None => {
                 continue;
             }
         }
-    };
+    }
 
     let mut remaining_lookup: Vec<u16> = vec![0; REMAINING_LOOKUP_PRODUCT + 1];
 
@@ -64,25 +84,33 @@ pub fn generate_remaining_table() -> Vec<u16> {
         remaining_lookup[*prime_product_identifier] = (idx + PAIR_OFFSET) as u16;
     }
 
-    let mut two_pair_evaluations = two_pair_evaluations.into_iter().collect::<Vec<(usize, u32)>>();
+    let mut two_pair_evaluations = two_pair_evaluations
+        .into_iter()
+        .collect::<Vec<(usize, u32)>>();
     two_pair_evaluations.sort_by(|a, b| a.1.cmp(&b.1));
     for (idx, (prime_product_identifier, _)) in two_pair_evaluations.iter().enumerate() {
         remaining_lookup[*prime_product_identifier] = (idx + TWO_PAIR_OFFSET) as u16;
     }
 
-    let mut three_of_a_kind_evaluations = three_of_a_kind_evaluations.into_iter().collect::<Vec<(usize, u32)>>();
+    let mut three_of_a_kind_evaluations = three_of_a_kind_evaluations
+        .into_iter()
+        .collect::<Vec<(usize, u32)>>();
     three_of_a_kind_evaluations.sort_by(|a, b| a.1.cmp(&b.1));
     for (idx, (prime_product_identifier, _)) in three_of_a_kind_evaluations.iter().enumerate() {
         remaining_lookup[*prime_product_identifier] = (idx + THREE_OF_A_KIND_OFFSET) as u16;
     }
 
-    let mut full_house_evaluations = full_house_evaluations.into_iter().collect::<Vec<(usize, u32)>>();
+    let mut full_house_evaluations = full_house_evaluations
+        .into_iter()
+        .collect::<Vec<(usize, u32)>>();
     full_house_evaluations.sort_by(|a, b| a.1.cmp(&b.1));
     for (idx, (prime_product_identifier, _)) in full_house_evaluations.iter().enumerate() {
         remaining_lookup[*prime_product_identifier] = (idx + FULL_HOUSE_OFFSET) as u16;
     }
 
-    let mut four_of_a_kind_evaluations = four_of_a_kind_evaluations.into_iter().collect::<Vec<(usize, u32)>>();
+    let mut four_of_a_kind_evaluations = four_of_a_kind_evaluations
+        .into_iter()
+        .collect::<Vec<(usize, u32)>>();
     four_of_a_kind_evaluations.sort_by(|a, b| a.1.cmp(&b.1));
     for (idx, (prime_product_identifier, _)) in four_of_a_kind_evaluations.iter().enumerate() {
         remaining_lookup[*prime_product_identifier] = (idx + FOUR_OF_A_KIND_OFFSET) as u16;
@@ -94,10 +122,10 @@ pub fn generate_remaining_table() -> Vec<u16> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use evaluate::generate_tables::generate_flush_table::generate_all_unique_rank_combos;
-    use models::card::{Card, Suit};
-    use lazy_static::lazy_static;
     use crate::evaluate::evaluate_hand::{prime_product_to_rank_string, DISTINCT_CARD_COMBOS};
+    use evaluate::generate_tables::generate_flush_table::generate_all_unique_rank_combos;
+    use lazy_static::lazy_static;
+    use models::card::{Card, Suit};
 
     #[cfg(debug_assertions)]
     const EVALS: usize = 1_000;
@@ -125,7 +153,11 @@ mod tests {
             }
             count += 1;
             if seen_rankings[*ranking as usize] != 0 {
-                panic!("Remaining table has duplicate entries {}, conflicts with rank {}", prime_product_to_rank_string(prime_product), ranking);
+                panic!(
+                    "Remaining table has duplicate entries {}, conflicts with rank {}",
+                    prime_product_to_rank_string(prime_product),
+                    ranking
+                );
             }
             seen_rankings[*ranking as usize] += 1;
         }
@@ -280,9 +312,8 @@ mod tests {
         assert_eq!(evaluation, 7297);
     }
 
-
     #[test]
-    fn all_straights_and_highcards_are_zero(){
+    fn all_straights_and_highcards_are_zero() {
         let straights = generate_all_unique_rank_combos(5);
         for straight in straights {
             let evaluation = evaluate_remaining(&straight);
@@ -292,7 +323,7 @@ mod tests {
 
     // A test to show the hand evaluation and board evaluation order doesn't mattter
     #[test]
-    fn order_invariance_hand(){
+    fn order_invariance_hand() {
         for _ in 0..EVALS {
             let hand = Card::new_random_cards(5);
             let first_eval = evaluate_remaining(&hand);
@@ -303,7 +334,7 @@ mod tests {
     }
 
     #[test]
-    fn test_correct_bucketing(){
+    fn test_correct_bucketing() {
         for _ in 0..EVALS {
             let hand = Card::new_random_cards(5);
             let eval = evaluate_remaining(&hand);
