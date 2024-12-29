@@ -12,7 +12,7 @@ pub enum HandType {
 }
 
 pub fn classify_hand_type (hand: &Vec<Card>) -> HandType {
-    let mut rank_counts = [0; 13];
+    let mut rank_counts = [0u8; 13];
     for card in hand {
         let idx = card.rank.to_int() as usize;
         rank_counts[idx] += 1;

@@ -1,4 +1,5 @@
-use crate::{evaluate::generate_tables::remaining_hand_types::HandType, models::card::Rank, Card};
+use crate::{evaluate::generate_tables::remaining_hand_types::HandType, models::card::Rank};
+use crate::models::card::Card;
 pub struct BoardAbstraction {
     pub max_consecutive_cards: u8,
     pub max_suit_count: u8,
