@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use rand::Rng;
 use std::{fmt::{Display, Formatter}, hash::{Hash, Hasher}};
 use crate::thread_utils::with_rng;
@@ -169,6 +170,16 @@ impl Display for Card {
     }
 }
 
+pub fn deal_string(deal: &NineCardDeal) -> String {
+    format!("P1 [{}, {}] P2 [{}, {}] Board [{}, {}, {}, {}, {}]",
+        deal[0], deal[1], deal[2], deal[3],
+        deal[4], deal[5], deal[6], deal[7], deal[8])
+}
+
+pub fn cards_string(cards: &[Card]) -> String {
+    cards.iter().map(|card| card.to_string()).join(" ")
+}
+
 impl Hash for Card {
     fn hash<H: Hasher>(&self, state: &mut H) {
         state.write_u8(self.serialise());
@@ -182,7 +193,7 @@ impl Card {
             rank,
         }
     }
-    
+
     pub fn from_int(card_number: u8) -> Card {
         let suit = card_number / 13;
         let rank = card_number % 13;
@@ -221,14 +232,19 @@ impl Card {
         res
     }
 
-    pub fn new_random_9_card_game_with(card1: Card, card2: Card) -> NineCardDeal {
+    pub fn new_random_9_card_game_with(card1: Card, card2: Card, card3: Card, card4: Card) -> NineCardDeal {
         let mut taken = [false; 52];
         let mut res = [Card::default(); 9];
         taken[card1.to_int() as usize] = true;
         taken[card2.to_int() as usize] = true;
+        taken[card3.to_int() as usize] = true;
+        taken[card4.to_int() as usize] = true;
         res[0] = card1;
         res[1] = card2;
-        let mut count = 2;
+        res[2] = card3;
+        res[3] = card4;
+
+        let mut count = 4;
         with_rng(|rng|
             while count < 9 {
                 let card_int = rng.gen::<u8>() % 52;
@@ -336,6 +352,33 @@ impl Card {
         Card::new(suit, rank)
     }
  
+    // TODO - move these dealing methods to a different class...
+    pub fn all_suited_combos_vs_hole_cards(hole_cards: (Card, Card), suit: Suit) -> impl Iterator<Item = ((Card, Card), (Card, Card))> {
+        Self::all_suited_combos(suit).into_iter()
+            .map(move |(a, b)| (hole_cards, (a, b)))
+    }
+
+    pub fn all_suited_player_cards_combos(suit: Suit) -> impl Iterator<Item = ((Card, Card), (Card, Card))> {
+        // Generate combinations of 4 ranks, then group them into pairs in different ways
+        (0..13)
+            .combinations(4) // All combinations of 4 ranks
+            .flat_map(move |combo| {
+                // Generate all unique pairings of the 4 ranks
+                [
+                    ((combo[0], combo[1]), (combo[2], combo[3])),
+                    ((combo[0], combo[2]), (combo[1], combo[3])),
+                    ((combo[0], combo[3]), (combo[1], combo[2])),
+                ]
+                .into_iter()
+                .map(move |((a, b), (c, d))| {
+                    (
+                        (Card::new(suit.clone(), Rank::from_int(a)), Card::new(suit.clone(), Rank::from_int(b))),
+                        (Card::new(suit.clone(), Rank::from_int(c)), Card::new(suit.clone(), Rank::from_int(d))),
+                    )
+                })
+            })
+    }
+    
     pub fn all_suited_combos(suit: Suit) -> impl Iterator<Item = (Card, Card)> {
         (0..12).flat_map(move |first_rank| {
             ((first_rank+1)..13).map({
@@ -481,8 +524,10 @@ mod tests {
     fn test_new_random_9_card_with_predicate() {
         let card1 = Card::new(Suit::Spades, Rank::Two);
         let card2 = Card::new(Suit::Hearts, Rank::Three);
+        let card3 = Card::new(Suit::Diamonds, Rank::Four);
+        let card4 = Card::new(Suit::Clubs, Rank::King);
         for _ in 0..10_000 {
-            let cards = Card::new_random_9_card_game_with(card1, card2);
+            let cards = Card::new_random_9_card_game_with(card1, card2, card3, card4);
             assert_eq!(cards.len(), 9);
             let mut seen = HashSet::new();
             for card in cards {
@@ -505,10 +550,10 @@ mod tests {
 
     #[test]
     fn test_9_random_card_game_with_performance() {
+        let existing_cards = Card::new_random_cards(4);
         let start = Instant::now();
-        let existing_cards = Card::new_random_cards(2);
         for _ in 0..100_000 {
-            _ = Card::new_random_9_card_game_with(existing_cards[0], existing_cards[1]);
+            _ = Card::new_random_9_card_game_with(existing_cards[0], existing_cards[1], existing_cards[2], existing_cards[3]);
         }
         let duration = start.elapsed();
         assert!(duration.as_millis() < 500, "Performance test failed: took too long to generate cards");
@@ -520,6 +565,39 @@ mod tests {
             let existing_cards = Card::new_random_cards(5);
             let new_card = Card::get_one_more_card(&existing_cards);
             assert!(!existing_cards.contains(&new_card));
+        }
+    }
+
+    #[test]
+    fn all_suited_whole_card_combos(){
+        // are unique, there are 78 of them, they are all sorted, they are all the same suit
+        let combos = Card::all_suited_combos(Suit::Spades).into_iter().collect::<Vec<_>>();
+        assert_eq!(combos.len(), 12*13 /2);
+        let mut seen = HashSet::new();
+        for combo in combos {
+            assert!(!seen.contains(&combo));
+            seen.insert(combo);
+            assert_eq!(combo.0.suit, Suit::Spades);
+            assert_eq!(combo.1.suit, Suit::Spades);
+            assert!(combo.0.rank.to_int() < combo.1.rank.to_int());
+        }
+    }
+
+    #[test]
+    fn all_suited_player_cards_combos(){
+        // are unique, there are 2145 of them, they are all sorted, they are all the same suit
+        let combos = Card::all_suited_player_cards_combos(Suit::Spades).collect::<Vec<_>>();
+        assert_eq!(combos.len(), 2145);
+        let mut seen = HashSet::new();
+        for combo in combos {
+            assert!(!seen.contains(&combo));
+            seen.insert(combo);
+            assert_eq!(combo.0.0.suit, Suit::Spades);
+            assert_eq!(combo.0.1.suit, Suit::Spades);
+            assert_eq!(combo.1.0.suit, Suit::Spades);
+            assert_eq!(combo.1.1.suit, Suit::Spades);
+            assert!(combo.0.0.rank.to_int() < combo.0.1.rank.to_int());
+            assert!(combo.1.0.rank.to_int() < combo.1.1.rank.to_int());
         }
     }
 }

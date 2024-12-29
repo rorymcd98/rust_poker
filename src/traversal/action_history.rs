@@ -16,9 +16,13 @@ pub fn validate_history(history: &Vec<Action>) {
     match history[1] {
         Action::Deal(card) => {
             seen.push(card);
+            if card.serialise() <= seen[0].serialise() {
+                panic!("Hole cards should be sorted for InfoSet serialisation: {:?}", history);
+            }
         },
         _ => panic!("Second action should be a deal: {:?}", history),
     }
+
 
     if history.len() < 3 {
         panic!("Not enough actions in history: {:?}", history);
@@ -158,6 +162,7 @@ impl ActionHistory {
         serialised_history
     }
 
+    // TODO - this needs to be reconfisdered for the strategy_branch
     // Create an 'impossible' 2-bit or 8-bit sequence indicating to the deserialiser that the history is complete
     fn get_terminal_serialisation(action: &Action) -> u8 {
         match action {
