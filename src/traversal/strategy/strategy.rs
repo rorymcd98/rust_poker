@@ -1,18 +1,18 @@
 use rand::Rng;
 
-use crate::{thread_utils::with_rng, traversal::action::DEFAULT_ACTION_COUNT};
+use crate::{thread_utils::with_rng, traversal::action_history::action::DEFAULT_ACTION_COUNT};
 
 /// Constants for the strategy according to the Discounted CFR paper
-const ALPHA: f64 = 1.5;
-const BETA: f64 = 0.0;
-const GAMMA: f64 = 2.0;
+const ALPHA: f32 = 1.5;
+const BETA: f32 = 0.0;
+const GAMMA: f32 = 2.0;
 
 /// Strategy struct to hold the current strategy and the sum of all strategies
 #[derive(Clone)]
 pub struct Strategy {
-    pub current_strategy: Vec<f64>,
-    strategy_sum: Vec<f64>,
-    pub regrets: Vec<f64>,
+    pub current_strategy: Vec<f32>,
+    strategy_sum: Vec<f32>,
+    pub regrets: Vec<f32>,
     pub actions: usize,
     _play_strategy_calculated: bool,
 }
@@ -22,7 +22,7 @@ impl Strategy {
     pub fn new(actions: usize) -> Strategy {
         let mut current_strategy = vec![0.0; DEFAULT_ACTION_COUNT];
         for i in 0..actions {
-            current_strategy[i] = 1.0 / actions as f64;
+            current_strategy[i] = 1.0 / actions as f32;
         }
         Strategy {
             current_strategy: current_strategy.clone(),
@@ -34,7 +34,7 @@ impl Strategy {
     }
 
     // update the regrets
-    pub fn update_strategy(&mut self, strategy_utility: f64, action_utilities: Vec<f64>, iter: usize){
+    pub fn update_strategy(&mut self, strategy_utility: f32, action_utilities: Vec<f32>, iter: usize){
         for a in 0..self.actions {
             self.regrets[a] += action_utilities[a] - strategy_utility;
         }
@@ -47,7 +47,7 @@ impl Strategy {
         let mut normalizing_sum = 0.0;
         
         for r in 0..self.actions {
-            self.regrets[r] = f64::max(self.regrets[r], 0.0);
+            self.regrets[r] = f32::max(self.regrets[r], 0.0); // COnsider using K/[K + C - R(a)]
             normalizing_sum += self.regrets[r];
         }
 
@@ -58,7 +58,7 @@ impl Strategy {
         } else { // TODO - ASSESS IF THIS IS EVER POSSIBLE?? surely not
             // If the normalizing sum is <= 0, then we have to assign equal probability to all actions
             for a in 0..self.actions {
-                self.current_strategy[a] = 1.0 / self.actions as f64;
+                self.current_strategy[a] = 1.0 / self.actions as f32;
             }
         };
     }
@@ -66,24 +66,25 @@ impl Strategy {
     // Updates the current strategy, discounting earlier iterations and favouring later ones
     fn update_strategy_sum_iter(&mut self, iter: usize) {
         // first update the strategy sum
-        let iter = iter as f64;
+        let iter = iter as f32;
         for index in 0..self.actions {
             // normalise the existing strategy_sum
-            let current_strategy_sum = self.strategy_sum[index];
-            if current_strategy_sum > 0.0 {
-                let iter_coeff = iter.powf(ALPHA);
-                let factor = iter_coeff / (iter_coeff + 1.0);
-                self.strategy_sum[index] *= factor;
-            } else {
-                let iter_coeff = iter.powf(BETA);
-                let factor = iter_coeff / (iter_coeff + 1.0);
-                self.strategy_sum[index] *= factor;
-            }
+            // let current_strategy_sum = self.strategy_sum[index];
+            // if current_strategy_sum > 0.0 {
+            //     let iter_coeff = iter.powf(ALPHA);
+            //     let factor = iter_coeff / (iter_coeff + 1.0);
+            //     self.strategy_sum[index] *= factor;
+            // } else {
+            //     let iter_coeff = iter.powf(BETA);
+            //     let factor = iter_coeff / (iter_coeff + 1.0);
+            //     self.strategy_sum[index] *= factor;
+            // }
             
-            // then add the new contribution calculated on this iteration
-            let contribution = self.current_strategy[index] * ((iter / (iter + 1.0)).powf(GAMMA)); // Weighted according to the iteration using DCRF
+            // // then add the new contribution calculated on this iteration
+            // let contribution = self.current_strategy[index] * ((iter / (iter + 1.0)).powf(GAMMA)); // Weighted according to the iteration using DCRF
             
-            self.strategy_sum[index] += contribution;
+            // self.strategy_sum[index] += contribution;
+            self.strategy_sum[index] += self.current_strategy[index];
         }
     }
 
@@ -102,7 +103,7 @@ impl Strategy {
         })
     }
 
-    pub fn get_strategy(&mut self, playing: bool) -> Vec<f64> {
+    pub fn get_strategy(&mut self, playing: bool) -> Vec<f32> {
         self.calculate_play_strategy(playing);
         self.current_strategy.clone()
     }
@@ -124,7 +125,7 @@ impl Strategy {
         } else {
             // If the normalizing sum is <= 0, then we have to assign equal probability to all actions
             for a in 0..self.actions {
-                self.current_strategy[a] = 1.0 / self.actions as f64;
+                self.current_strategy[a] = 1.0 / self.actions as f32;
             }
         };
 

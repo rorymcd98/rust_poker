@@ -1,5 +1,7 @@
 use std::{collections::HashMap, thread::panicking};
-use crate::traversal::action::Action;
+use rand::Rng;
+
+use crate::{thread_utils::with_rng, traversal::action_history::action::Action};
 
 use super::strategy::Strategy;
 
@@ -15,13 +17,25 @@ impl StrategyBranch {
         StrategyBranch {
             map: HashMap::new(),
         }
-    }
+        }
 
-    pub fn get_strategy(&mut self, info_set: InfoNode) -> &mut Strategy {
-        self.map.get_mut(&info_set).expect("Strategy not found")
-    }
+        pub fn get_strategy(&mut self, mut info_set: InfoNode) -> &mut Strategy {
+            info_set.pop();
+            self.map.get_mut(&info_set).expect("Strategy not found")
+        }
 
-    pub fn get_or_create_strategy(&mut self, info_set: InfoNode, actions: usize) -> &mut Strategy {
+    pub fn get_or_create_strategy(&mut self, mut info_set: InfoNode, actions: usize) -> &mut Strategy {
+        info_set.pop();
+        with_rng(|rng| {
+            // if we hit < 0.01 we log whether the strategy was created or not
+            if rng.gen::<u16>() == 1 {
+                if self.map.contains_key(&info_set) {
+                    println!("Strategy already exists");
+                } else {
+                    println!("Strategy created");
+                }
+            }
+        });
         self.map.entry(info_set).or_insert(Strategy::new(actions))
     }
 
@@ -38,7 +52,7 @@ impl StrategyBranch {
 }
 
 pub struct StrategyBranchStreamIterator<'a> {
-    byte_stream_iterator: std::slice::Iter<'a, f64>,
+    byte_stream_iterator: std::slice::Iter<'a, f32>,
 }
 
 impl<'a> Iterator for StrategyBranchStreamIterator<'a> {

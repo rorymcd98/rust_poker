@@ -2,7 +2,7 @@ use core::panic;
 
 use itertools::Itertools;
 
-use crate::traversal::action::Action;
+use crate::traversal::action_history::action::Action;
 
 pub fn validate_history(history: &Vec<Action>) {
     let mut seen = vec![];

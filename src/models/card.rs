@@ -77,6 +77,12 @@ pub enum Rank {
     Ace,
 }
 
+impl Default for Rank {
+    fn default() -> Self {
+        Rank::Two
+    }
+}
+
 impl Display for Rank {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", match self {
