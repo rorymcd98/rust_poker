@@ -29,27 +29,14 @@ Maximum bit capacity
 // Aim of the algorithm - Calculate % of time to take each action, at each oppportunity (a.k.a node).
 [Check%, Fold%, Call%, Bet%]
 
-// What do I mean by opportunity?
-Game starts with cards = AKs
-Question: "What do you do!?"
-Answer: Play this strategy: [C%, F%, C%, B%] <- depends on everything that's happened so far
+Strategy for 2s Ts vs 5s 6s is [0.018241158, 0.21043459, 0.7713243], with utilities [-0.007873512, -0.016031628, -5.9523315], bets this round 1
 
-Ok we BET
+Strategy for 5s 6s vs 2s Ts is [0.2731592, 0.38669464, 0.34014618], with utilities [-0.55577767, -6.1325774, 0.5090525], bets this round 1
 
-Ok now opponent BETs
 
-Question: "What do you do!?"
-Answer: Play this strategy: [C%, F%, C%, B%] <- depends on everything that's happened so far
+Main TODOs:
 
-Ok we CALL
+Hand solver
+Split the strategy sampling into two phases where we skip actions with marginal actions (less than 1%)
 
-CARDS DEALT
-A J Q
 
-Question: "What do you do!?" < short for > "What do you do with AKs after BET BET A J Q?"
-Answer: Play this strategy: [C%, F%, C%, B%] <- depends on everything that's happened so far
-
-Questions_Answers {
-    //"Sonya 123" : {age: ~20, location: prague}
-    "What do you do with AKs after BET BET A J Q?" : [10%, 30%, 20%, 40%],
-}

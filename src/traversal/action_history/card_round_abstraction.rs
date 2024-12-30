@@ -1,4 +1,6 @@
-use crate::models::card::Card;
+use std::fmt::Display;
+
+use crate::{evaluate::generate_tables::remaining_hand_types::HandType, models::card::Card};
 
 use super::{
     board_abstraction::BoardAbstraction,
@@ -17,6 +19,35 @@ pub struct CardRoundAbstraction {
     pub flush_abstraction: Option<FlushAbstraction>,
 }
 
+impl Display for CardRoundAbstraction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let connected_cards_display = match &self.connected_cards_abstraction {
+            Some(connected_cards) => format!("{}", connected_cards),
+            None => "None".to_string(),
+        };
+
+        let straight_cards_display = match &self.straight_abstraction {
+            Some(straight) => format!("{}", straight),
+            None => "None".to_string(),
+        };
+
+        let flush_cards_display = match &self.flush_abstraction {
+            Some(flush) => format!("{}", flush),
+            None => "None".to_string(),
+        };
+
+
+        write!(
+            f,
+            "Board {}\nConnected Cards: {}\nStraight: {}\nFlush: {}",
+            self.board_abstraction,
+            connected_cards_display,
+            straight_cards_display,
+            flush_cards_display
+        )
+    }
+}
+
 impl CardRoundAbstraction {
     pub fn new(hole_cards: &[Card; 2], board_cards: &[Card]) -> CardRoundAbstraction {
         let board_abstraction = BoardAbstraction::new(board_cards);
@@ -33,14 +64,37 @@ impl CardRoundAbstraction {
     }
 
     pub fn serialise(&self) -> CardRoundAbstractionSerialised {
-        // let mut serialised = vec![];
-        // serialised.push(self.board_abstraction.max_consecutive_cards);
-        // serialised.push(self.board_abstraction.max_suit_count);
-        // serialised.push(self.board_abstraction.board_hand_type.to_int());
-        // serialised.push(self.connected_cards_abstraction.as_ref().map_or(0, |a| a.to_int()));
-        // serialised.push(self.straight_abstraction.as_ref().map_or(0, |a| a.to_int()));
-        // serialised.push(self.flush_abstraction.as_ref().map_or(0, |a| a.to_int()));
-        // serialised
-        vec![]
+        let mut serialised = vec![];
+        serialised.push(self.board_abstraction.max_consecutive_cards);
+        serialised.push(self.board_abstraction.suit_count_abstraction);
+        let hand_type_serialised = match self.board_abstraction.board_hand_type {
+            HandType::Pair(_) => 1,
+            HandType::TwoPair(_, _) => 2,
+            HandType::ThreeOfAKind(_) => 3,
+            HandType::FullHouse(_, _) => 4,
+            HandType::FourOfAKind(_) => 5,
+            HandType::None => 0,
+        };
+        serialised.push(hand_type_serialised);
+
+        if let Some(connected_cards_abstraction) = &self.connected_cards_abstraction {
+            serialised.push(connected_cards_abstraction.serialise());
+        } else {
+            serialised.push(0);
+        }
+
+        if let Some(straight_abstraction) = &self.straight_abstraction {
+            serialised.push(straight_abstraction.serialise());
+        } else {
+            serialised.push(0);
+        }
+
+        if let Some(flush_abstraction) = &self.flush_abstraction {
+            serialised.push(flush_abstraction.serialise());
+        } else {
+            serialised.push(0);
+        }
+
+        serialised
     }
 }

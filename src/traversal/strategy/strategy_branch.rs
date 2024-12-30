@@ -1,15 +1,13 @@
 use rand::Rng;
 use std::collections::HashMap;
 
-use crate::thread_utils::with_rng;
+use crate::{thread_utils::with_rng, traversal::action_history::game_abstraction::GameAbstractionSerialised};
 
 use super::strategy::Strategy;
 
-pub type InfoNode = Vec<u8>;
-
 #[derive(Default)]
 pub struct StrategyBranch {
-    map: HashMap<InfoNode, Strategy>,
+    map: HashMap<GameAbstractionSerialised, Strategy>,
 }
 
 impl StrategyBranch {
@@ -19,28 +17,16 @@ impl StrategyBranch {
         }
     }
 
-    pub fn get_strategy(&mut self, mut info_set: InfoNode) -> &mut Strategy {
-        info_set.pop();
+    pub fn get_strategy(&mut self, info_set: GameAbstractionSerialised) -> &mut Strategy {
         self.map.get_mut(&info_set).expect("Strategy not found")
     }
 
     pub fn get_or_create_strategy(
         &mut self,
-        mut info_set: InfoNode,
-        actions: usize,
+        info_set: GameAbstractionSerialised,
+        num_actions: usize,
     ) -> &mut Strategy {
-        info_set.pop();
-        with_rng(|rng| {
-            // if we hit < 0.01 we log whether the strategy was created or not
-            if rng.gen::<u16>() == 1 {
-                if self.map.contains_key(&info_set) {
-                    println!("Strategy already exists");
-                } else {
-                    println!("Strategy created");
-                }
-            }
-        });
-        self.map.entry(info_set).or_insert(Strategy::new(actions))
+        self.map.entry(info_set).or_insert(Strategy::new(num_actions))
     }
 
     pub fn print_stats(&self) {

@@ -55,7 +55,7 @@ mod uniques_generation_test {
 }
 
 fn is_straight(hand: &Vec<Card>) -> bool {
-    let mut ranks = [0u8; 13];
+    let mut ranks = [0u8; 14]; // 0 is for Ace, 14 is for high
     for card in hand {
         ranks[1 + card.rank.to_int() as usize] += 1;
         if card.rank == Rank::Ace {

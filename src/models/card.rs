@@ -62,6 +62,8 @@ impl Suit {
     }
 }
 
+pub type RankInt = u8;
+
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Default)]
 pub enum Rank {
     #[default]
@@ -205,7 +207,7 @@ impl Card {
         Card::new(Suit::from_int(suit), Rank::from_int(rank))
     }
 
-    pub fn to_int(&self) -> u8 {
+    pub fn to_int(self) -> u8 {
         self.suit.to_int() * 13 + self.rank.to_int()
     }
 
