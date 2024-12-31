@@ -1,7 +1,9 @@
 use rand::Rng;
 use std::collections::HashMap;
 
-use crate::{thread_utils::with_rng, traversal::action_history::game_abstraction::GameAbstractionSerialised};
+use crate::{
+    thread_utils::with_rng, traversal::action_history::game_abstraction::GameAbstractionSerialised,
+};
 
 use super::strategy::Strategy;
 
@@ -26,7 +28,9 @@ impl StrategyBranch {
         info_set: GameAbstractionSerialised,
         num_actions: usize,
     ) -> &mut Strategy {
-        self.map.entry(info_set).or_insert(Strategy::new(num_actions))
+        self.map
+            .entry(info_set)
+            .or_insert(Strategy::new(num_actions))
     }
 
     pub fn print_stats(&self) {

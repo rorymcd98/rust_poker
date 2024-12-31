@@ -36,7 +36,6 @@ impl Display for CardRoundAbstraction {
             None => "None".to_string(),
         };
 
-
         write!(
             f,
             "Board {}\nConnected Cards: {}\nStraight: {}\nFlush: {}",

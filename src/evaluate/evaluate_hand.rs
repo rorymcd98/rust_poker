@@ -10,10 +10,10 @@ pub const PRIME_MASK: u32 = 0b11111111;
 pub const SUIT_MASK: u32 = 0b111100000000;
 
 // 7462 = all possible rank combinations (4 * (13 choose 5))
+#[cfg(test)]
 pub const DISTINCT_CARD_COMBOS: usize = 7462;
 
 // 7937 = xxxAKQJTxxxxxxxx (+1) the bit pattern of a royal flush
-// TODO - find a better name
 pub const BIT_REP_LIMIT: usize = 7937; // We often add 1 to this so that we can use the 0 index as a sentinel / null value
 
 // 41*41*41*41*37 (product of prime numbers) - this is allocating around 1.6GB; TODO - perfect hashing?

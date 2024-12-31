@@ -37,6 +37,7 @@ Strategy for 5s 6s vs 2s Ts is [0.2731592, 0.38669464, 0.34014618], with utiliti
 Main TODOs:
 
 Hand solver
-Split the strategy sampling into two phases where we skip actions with marginal actions (less than 1%)
-
+Split the strategy sampling into two phases where we skip actions with marginal actions
+Branch pruning
+Profiling
 

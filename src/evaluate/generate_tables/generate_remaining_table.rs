@@ -21,7 +21,6 @@ fn generate_all_hand_combos(num_cards: usize) -> Vec<Vec<Card>> {
     combos
 }
 
-// TODO - Double check the accounting here
 // These numbers are just the number of cards in the previous hand type (e.g. 1277 is the number of high-card combos, 2860 is the number of pairs etc.)
 const PAIR_OFFSET: usize = 1277 + 1; // +1 to allow for 0 index to equal not found
 const TWO_PAIR_OFFSET: usize = 2860 + PAIR_OFFSET;

@@ -1,7 +1,10 @@
 use std::fmt::format;
 
 use crate::{
-    models::{card::{NineCardDeal, Rank}, player, Player},
+    models::{
+        card::{NineCardDeal, Rank},
+        player, Player,
+    },
     traversal::action_history::card_round_abstraction::CardRoundAbstraction,
 };
 
@@ -27,7 +30,8 @@ pub struct GameAbstraction {
 }
 
 impl GameAbstraction {
-    pub fn get_abstraction(&self,
+    pub fn get_abstraction(
+        &self,
         round: usize,
         game_pot: u8,
         bets_this_round: u8,
@@ -35,7 +39,7 @@ impl GameAbstraction {
     ) -> GameAbstractionSerialised {
         // [] = 8 bits
         // [hole1] [hole2] [round bets (4bits) | xx | suited cards | is sb] [ ... round abstraction ...] [game pot] [round bets]
-        
+
         let is_sb = current_player == self.sb_player;
         let hole_cards = match current_player {
             Player::Traverser => &self.traverser_hole_cards,
@@ -68,10 +72,7 @@ impl GameAbstraction {
     }
 }
 
-pub fn convert_deal_into_abstraction(
-    deal: NineCardDeal,
-    sb_player: Player,
-) -> GameAbstraction {
+pub fn convert_deal_into_abstraction(deal: NineCardDeal, sb_player: Player) -> GameAbstraction {
     let traverser_hole_cards = HoleCardsAbstraction {
         lower_card: deal[0].rank,
         higher_card: deal[1].rank,

@@ -3,7 +3,9 @@ use lazy_static::lazy_static;
 use rand::seq::SliceRandom;
 
 use super::action_history::action_history::ActionHistory;
-use super::action_history::game_abstraction::{convert_deal_into_abstraction, GameAbstraction, GameAbstractionSerialised};
+use super::action_history::game_abstraction::{
+    convert_deal_into_abstraction, GameAbstraction, GameAbstractionSerialised,
+};
 use super::strategy::{strategy_branch::StrategyBranch, strategy_map::StrategyMap};
 use crate::evaluate::evaluate_hand::EvaluateHand;
 use crate::evaluate::evaluate_hand::HandEvaluator;
@@ -49,15 +51,9 @@ pub const BIG_BLIND: u8 = 2;
 // TODO - move all the rules up here, then to an entirely separate file
 
 impl GameStateHelper {
-    pub fn new(
-        nine_card_deal: NineCardDeal,
-        small_blind_player: Player,
-    ) -> GameStateHelper {
+    pub fn new(nine_card_deal: NineCardDeal, small_blind_player: Player) -> GameStateHelper {
         GameStateHelper {
-            game_abstraction: convert_deal_into_abstraction(
-                nine_card_deal,
-                small_blind_player,
-            ),
+            game_abstraction: convert_deal_into_abstraction(nine_card_deal, small_blind_player),
             traverser_pot: Cell::new(if small_blind_player == Player::Traverser {
                 SMALL_BLIND
             } else {
@@ -93,8 +89,7 @@ impl GameStateHelper {
     }
 
     pub fn set_current_player_to_big_blind(&self) {
-        self.current_player
-            .set(self.big_blind_player);
+        self.current_player.set(self.big_blind_player);
     }
 
     pub fn get_flop(&self) -> [Card; 3] {
@@ -166,7 +161,7 @@ impl GameStateHelper {
             }
         } else {
             if self.get_current_player_pot() < self.get_non_current_player_pot() {
-                // If the pots are unequal and we have less in the pot, then it's our turn 
+                // If the pots are unequal and we have less in the pot, then it's our turn
                 TerminalState::None
             } else {
                 // Otherwise the opponent just folded
@@ -205,7 +200,11 @@ impl GameStateHelper {
 
     pub fn bet(&self) {
         self.bets_this_round.set(self.bets_this_round.get() + 1);
-        let raise = if self.is_preflop() { BIG_BLIND } else { BIG_BLIND * 2 };
+        let raise = if self.is_preflop() {
+            BIG_BLIND
+        } else {
+            BIG_BLIND * 2
+        };
         match self.current_player.get() {
             Player::Traverser => {
                 self.traverser_pot.set(self.opponent_pot.get() + raise);
@@ -239,7 +238,7 @@ impl GameStateHelper {
 
     pub fn call(&self) {
         if self.get_current_player_pot() == 2 {
-            self.checkfold(); // Pseudo check 
+            self.checkfold(); // Pseudo check
         }
         match self.current_player.get() {
             Player::Traverser => {
@@ -258,7 +257,13 @@ impl GameStateHelper {
     }
 
     // Set the state back to a previous action
-    pub fn undo(&self, acting_player: Player, previous_pot: u8, previous_bets: u8, previous_checks: u8) {
+    pub fn undo(
+        &self,
+        acting_player: Player,
+        previous_pot: u8,
+        previous_bets: u8,
+        previous_checks: u8,
+    ) {
         match acting_player {
             Player::Traverser => {
                 self.traverser_pot.set(previous_pot);
@@ -302,7 +307,7 @@ impl GameStateHelper {
     }
 }
 
-const TRAIN_ITERATIONS: usize = 100_0000;
+const TRAIN_ITERATIONS: usize = 100_000;
 const PLAY_ITERATIONS: usize = 1000;
 const SUBPLAY_ITERATIONS: usize = 1000;
 const NUM_THREADS: usize = 1;
@@ -395,8 +400,7 @@ impl TreeTraverser {
                             ),
                         };
 
-                        let game_state =
-                            GameStateHelper::new(deal, *player);
+                        let game_state = GameStateHelper::new(deal, *player);
                         let mut branch_traverser =
                             BranchTraverser::new(strategy_branch, game_state, iteration);
 
@@ -646,7 +650,7 @@ impl BranchTraverser {
         let checks_before = self.game_state.checks_this_round.get();
 
         if self.game_state.current_player.get().is_opponent() {
-            let sampled_action= {
+            let sampled_action = {
                 let mut strategy_branch = self.strategy_branch.borrow_mut();
                 let strategy = strategy_branch
                     .get_or_create_strategy(info_node_key.clone(), num_available_actions);
@@ -663,8 +667,12 @@ impl BranchTraverser {
 
             self.game_state.switch_current_player();
             let utility = self.traverse_action(playing);
-            self.game_state
-                .undo(previous_player, pot_before_action, bets_before_action, checks_before);
+            self.game_state.undo(
+                previous_player,
+                pot_before_action,
+                bets_before_action,
+                checks_before,
+            );
             utility
         } else {
             let mut utility = 0.0;
@@ -679,31 +687,39 @@ impl BranchTraverser {
             for action in 0..num_available_actions {
                 let pot_before_action = self.game_state.get_current_player_pot();
                 match action {
-                    0 => self.game_state.checkfold(), 
+                    0 => self.game_state.checkfold(),
                     1 => self.game_state.call_or_bet(), // TODO - change this call-or-bet logic
                     2 => self.game_state.bet(),
                     _ => panic!("Invalid action"),
                 };
                 self.game_state.switch_current_player();
-                utilities[action] = self.traverse_action(playing) * current_strategy[action]; // WHY DID MOVING THIS BELOW MATTER?
-                self.game_state
-                    .undo(previous_player, pot_before_action, bets_before_action, checks_before);
+                utilities[action] = self.traverse_action(playing);
+                self.game_state.undo(
+                    previous_player,
+                    pot_before_action,
+                    bets_before_action,
+                    checks_before,
+                );
             }
 
             for action in 0..num_available_actions {
-                utility += utilities[action];
+                utility += utilities[action] * current_strategy[action];
             }
 
             if !playing {
                 let mut strategy_branch = self.strategy_branch.borrow_mut();
                 let strategy = strategy_branch.get_strategy(info_node_key.clone());
                 strategy.update_strategy(utility, utilities.clone(), self.iteration);
-                if self.iteration % 1000 == 0 && self.game_state.get_current_player_pot() == 2   && self.game_state.cards[0].rank == Rank::Ace {
+                if self.iteration % 1000 == 0
+                    && self.game_state.get_current_player_pot() == 2
+                    && self.game_state.cards[0].rank == Rank::Two
+                {
                     println!(
-                        "Strategy for {} vs {} is {:?}, with utilities {:?}, bets this round {}",
+                        "Strategy for {} vs {} is {:?}, regrets {:?}, with utilities {:?}, bets this round {}",
                         cards_string(&self.game_state.get_current_player_cards()),
                         cards_string(&self.game_state.get_non_current_player_cards()),
-                        strategy.regrets,
+                        strategy.get_strategy(true),
+                        strategy.regrets_sum,
                         utilities.clone(),
                         self.game_state.bets_this_round.get()
                     );
@@ -720,7 +736,8 @@ impl BranchTraverser {
         let check_before = self.game_state.checks_this_round.get();
         self.game_state.deal_flop();
         let utility = self.traverse_action(playing);
-        self.game_state.undeal_flop(previous_bets, previous_player, check_before);
+        self.game_state
+            .undeal_flop(previous_bets, previous_player, check_before);
         utility
     }
 
@@ -730,7 +747,8 @@ impl BranchTraverser {
         let checks_before = self.game_state.checks_this_round.get();
         self.game_state.deal();
         let utility = self.traverse_action(playing);
-        self.game_state.undeal(previous_bets, previous_player, checks_before);
+        self.game_state
+            .undeal(previous_bets, previous_player, checks_before);
         utility
     }
 }

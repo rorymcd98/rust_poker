@@ -1,5 +1,8 @@
+use crate::models::{
+    card::{Card, Rank, RankInt},
+    player,
+};
 use std::fmt::Display;
-use crate::models::{card::{Card, Rank, RankInt}, player};
 
 // TODO - assess if this abstraction makes sense
 // Bucket ints to A-K, Q-9, 8-..
@@ -113,7 +116,8 @@ pub fn get_straight_abstraction(
                 if in_window >= 3 && consecutive >= 3 {
                     longest_straight_without_gutshot = consecutive.min(5);
                     openended_high_card = i;
-                } else if in_window == 4 && consecutive < 4 { // for the case of abstraction we only care about gutshot 4
+                } else if in_window == 4 && consecutive < 4 {
+                    // for the case of abstraction we only care about gutshot 4
                     longest_straight_with_gutshot = 4;
                     gutshot_high_card = i;
                 }
@@ -134,7 +138,9 @@ pub fn get_straight_abstraction(
     }
 
     // TODO - Must test this
-    if 5 - longest_straight_with_gutshot.max(longest_straight_without_gutshot) > 5 - board_cards.len() as u8 {
+    if 5 - longest_straight_with_gutshot.max(longest_straight_without_gutshot)
+        > 5 - board_cards.len() as u8
+    {
         // If there aren't enough cards left to make a straight,
         return None;
     }
@@ -160,9 +166,9 @@ pub fn get_straight_abstraction(
 
 #[cfg(test)]
 mod straight_abstraction_tests {
-    use rstest::rstest;
-    use crate::models::card::Suit;
     use super::*;
+    use crate::models::card::Suit;
+    use rstest::rstest;
 
     #[test]
     fn test_bucket_rank() {
@@ -419,7 +425,6 @@ mod straight_abstraction_tests {
         assert_eq!(abstraction.cards_in_straight, 4);
         assert_eq!(abstraction.requires_gutshot, true);
     }
-    
 
     #[test]
     fn test_straight_is_on_the_board() {
@@ -531,17 +536,17 @@ mod straight_abstraction_tests {
                 suit: Suit::Hearts,
             },
         ];
-        let abstraction = get_straight_abstraction(&hole_cards, &board_cards).expect("Expected abstraction to be generated");
+        let abstraction = get_straight_abstraction(&hole_cards, &board_cards)
+            .expect("Expected abstraction to be generated");
         assert_eq!(abstraction.bucketed_high_card, Rank::Queen);
         assert_eq!(abstraction.cards_in_straight, 5);
         assert_eq!(abstraction.requires_gutshot, false);
     }
-
 }
 
 pub struct FlushAbstraction {
-    pub flush_score: u8,        // 0 == nut flush, 1 == second or third nut flush, 2 == fourth or worse flush
-    pub cards_to_draw: u8,      // 0, 1, (& 2 on flop)
+    pub flush_score: u8, // 0 == nut flush, 1 == second or third nut flush, 2 == fourth or worse flush
+    pub cards_to_draw: u8, // 0, 1, (& 2 on flop)
 }
 
 impl Display for FlushAbstraction {
@@ -568,12 +573,15 @@ impl FlushAbstraction {
 
 // Check if the player has made a flush
 // If they have score the player's flush based on the number of
-// Mark the number of cards the player needs to draw 
+// Mark the number of cards the player needs to draw
 // If they haven't, return None
 //
 // Note: We don't check if the board flush dominates the player's flush, the player could still lose a showdown against a higher flush
 // The score should give an indication of how much we can bluff in a split-pot board flush, or how much we should fear a higher flush
-pub fn get_flush_abstraction(hole_cards: &[Card; 2], board_cards: &[Card]) -> Option<FlushAbstraction> {
+pub fn get_flush_abstraction(
+    hole_cards: &[Card; 2],
+    board_cards: &[Card],
+) -> Option<FlushAbstraction> {
     debug_assert!(hole_cards[0].to_int() < hole_cards[1].to_int());
     if board_cards.len() == 0 {
         return None;
@@ -585,7 +593,8 @@ pub fn get_flush_abstraction(hole_cards: &[Card; 2], board_cards: &[Card]) -> Op
     // Bucket the suits and say which are in the hand vs on the board
     for card in board_cards {
         let idx = card.suit.to_int() as usize;
-        suit_counts[idx] += 1;    }
+        suit_counts[idx] += 1;
+    }
     for card in hole_cards {
         let idx = card.suit.to_int() as usize;
         suit_counts[idx] += 1;
@@ -603,7 +612,7 @@ pub fn get_flush_abstraction(hole_cards: &[Card; 2], board_cards: &[Card]) -> Op
         }
     }
 
-    let cards_to_draw = 5-most_flush_count_player.min(5);
+    let cards_to_draw = 5 - most_flush_count_player.min(5);
 
     if cards_to_draw >= 3 || cards_to_draw > 5 - board_cards.len() {
         // If we have to draw three or more cards, or there aren't enough cards left to make a flush
@@ -618,30 +627,37 @@ pub fn get_flush_abstraction(hole_cards: &[Card; 2], board_cards: &[Card]) -> Op
         hole_cards[0].rank.to_int()
     };
 
-    println!("most_flushing_player_rank: {}", Rank::from_int(most_flushing_player_rank));
+    println!(
+        "most_flushing_player_rank: {}",
+        Rank::from_int(most_flushing_player_rank)
+    );
     println!("rank as num: {}", most_flushing_player_rank);
 
     let mut beating_player_card = 0;
     for card in board_cards {
-        if card.suit.to_int() == most_flush_suit_player as u8 && card.rank.to_int() > most_flushing_player_rank {
+        if card.suit.to_int() == most_flush_suit_player as u8
+            && card.rank.to_int() > most_flushing_player_rank
+        {
             beating_player_card += 1;
         }
     }
 
     println!("beating_player_card: {}", beating_player_card);
 
-
     // E.g. Ace (12) has 0 cards beating it, meaning 0 missing cards (12 - 12 - 0 == 0)
     // E.g. Jack (9) might have 2 board cards beating it (let's say KQ), meaning 1 missing card (the ace) (12 - 9 - 2 == 1)
     // E.g. 5 (3) might have 4 board cards beating it (let's say 6789), meaning 5 missing cards (T-A) (12 - 3 - 4 == 5)
     let missing_cards_that_beat_player = 12 - most_flushing_player_rank - beating_player_card;
 
-    println!("missing_cards_that_beat_player: {}", missing_cards_that_beat_player);
+    println!(
+        "missing_cards_that_beat_player: {}",
+        missing_cards_that_beat_player
+    );
 
     let player_flush_score = match missing_cards_that_beat_player {
-        0 => 0, // Nut flush
+        0 => 0,     // Nut flush
         1..=2 => 1, // Second or third nut flush
-        _ => 2, // Fourth or worse flush
+        _ => 2,     // Fourth or worse flush
     };
 
     if most_flush_count_player >= 3 {
@@ -656,8 +672,8 @@ pub fn get_flush_abstraction(hole_cards: &[Card; 2], board_cards: &[Card]) -> Op
 
 #[cfg(test)]
 mod flush_abstraction_tests {
-    use crate::models::card::Suit;
     use super::*;
+    use crate::models::card::Suit;
 
     #[test]
     fn get_flush_low_score() {
@@ -791,9 +807,15 @@ impl Display for ConnectedCardsAbstraction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ConnectedCardsAbstraction::Pair(p) => write!(f, "Pair {}", p.pair_order_score),
-            ConnectedCardsAbstraction::TwoPair(tp) => write!(f, "Two Pair {}", tp.two_pair_order_score),
-            ConnectedCardsAbstraction::ThreeOfAKind(toak) => write!(f, "Three of a Kind {}", toak.toak_order_score),
-            ConnectedCardsAbstraction::FullHouse(fh) => write!(f, "Full House {}", fh.high_card_is_house),
+            ConnectedCardsAbstraction::TwoPair(tp) => {
+                write!(f, "Two Pair {}", tp.two_pair_order_score)
+            }
+            ConnectedCardsAbstraction::ThreeOfAKind(toak) => {
+                write!(f, "Three of a Kind {}", toak.toak_order_score)
+            }
+            ConnectedCardsAbstraction::FullHouse(fh) => {
+                write!(f, "Full House {}", fh.high_card_is_house)
+            }
             ConnectedCardsAbstraction::FourOfAKind => write!(f, "Four of a Kind"),
         }
     }
@@ -930,7 +952,7 @@ mod connected_cards_abstraction_tests {
                 suit: Suit::Spades,
             },
         ];
-        let abstraction = get_connected_card_abstraction    (&hole_cards, &board_cards).unwrap();
+        let abstraction = get_connected_card_abstraction(&hole_cards, &board_cards).unwrap();
         match abstraction {
             ConnectedCardsAbstraction::FullHouse(abstraction) => {
                 assert!(abstraction.high_card_is_house);

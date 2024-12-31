@@ -78,8 +78,7 @@ impl BoardAbstraction {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::card::{Card, Suit, Rank};
-
+    use crate::models::card::{Card, Rank, Suit};
 
     #[test]
     fn test_board_abstraction_pair() {
@@ -93,7 +92,10 @@ mod tests {
         let board_abstraction = BoardAbstraction::new(&cards);
         assert_eq!(board_abstraction.max_consecutive_cards, 4);
         assert_eq!(board_abstraction.suit_count_abstraction, 0);
-        assert!(matches!(board_abstraction.board_hand_type, HandType::Pair(_)));
+        assert!(matches!(
+            board_abstraction.board_hand_type,
+            HandType::Pair(_)
+        ));
     }
 
     #[test]
@@ -108,7 +110,10 @@ mod tests {
         let board_abstraction = BoardAbstraction::new(&cards);
         assert_eq!(board_abstraction.max_consecutive_cards, 2);
         assert_eq!(board_abstraction.suit_count_abstraction, 0);
-        assert!(matches!(board_abstraction.board_hand_type, HandType::TwoPair(_, _)));
+        assert!(matches!(
+            board_abstraction.board_hand_type,
+            HandType::TwoPair(_, _)
+        ));
     }
 
     #[test]
@@ -123,7 +128,10 @@ mod tests {
         let board_abstraction = BoardAbstraction::new(&cards);
         assert_eq!(board_abstraction.max_consecutive_cards, 2);
         assert_eq!(board_abstraction.suit_count_abstraction, 4);
-        assert!(matches!(board_abstraction.board_hand_type, HandType::ThreeOfAKind(_)));
+        assert!(matches!(
+            board_abstraction.board_hand_type,
+            HandType::ThreeOfAKind(_)
+        ));
     }
 
     #[test]
@@ -138,7 +146,10 @@ mod tests {
         let board_abstraction = BoardAbstraction::new(&cards);
         assert_eq!(board_abstraction.max_consecutive_cards, 2);
         assert_eq!(board_abstraction.suit_count_abstraction, 0);
-        assert!(matches!(board_abstraction.board_hand_type, HandType::FullHouse(_, _)));
+        assert!(matches!(
+            board_abstraction.board_hand_type,
+            HandType::FullHouse(_, _)
+        ));
     }
 
     #[test]
@@ -153,7 +164,10 @@ mod tests {
         let board_abstraction = BoardAbstraction::new(&cards);
         assert_eq!(board_abstraction.max_consecutive_cards, 1);
         assert_eq!(board_abstraction.suit_count_abstraction, 1);
-        assert!(matches!(board_abstraction.board_hand_type, HandType::FourOfAKind(_)));
+        assert!(matches!(
+            board_abstraction.board_hand_type,
+            HandType::FourOfAKind(_)
+        ));
     }
 
     #[test]
