@@ -149,13 +149,13 @@ pub trait HandEvaluator {
     fn evaluate_deal(&self, deal: NineCardDeal) -> Option<Player>;
 }
 
-pub struct EvaluateHand {
+pub struct HandEvaluatorLookup {
     hand_lookup: HandLookupArrays,
 }
 
-impl EvaluateHand {
+impl HandEvaluatorLookup {
     pub fn new() -> Self {
-        EvaluateHand {
+        HandEvaluatorLookup {
             hand_lookup: HandLookupArrays::new(),
         }
     }
@@ -171,7 +171,7 @@ pub fn hand_to_id(hand: &[Card]) -> [CardId; 5] {
     ]
 }
 
-impl HandEvaluator for EvaluateHand {
+impl HandEvaluator for HandEvaluatorLookup {
     fn evaluate(&self, cards: [Card; 5]) -> u16 {
         let card_ids = hand_to_id(&cards);
         let flush = is_flush(&card_ids);
@@ -209,7 +209,7 @@ impl HandEvaluator for EvaluateHand {
     }
 }
 
-impl EvaluateHand {
+impl HandEvaluatorLookup {
     fn score_for_indices(&self, deal: &[Card; 9], i1: usize) -> u16 {
         let mut max_score = 0;
         let i2 = i1 + 1;
@@ -262,7 +262,7 @@ mod tests {
     use rand::seq::SliceRandom;
 
     lazy_static! {
-        static ref EVALUATOR: EvaluateHand = EvaluateHand::new();
+        static ref EVALUATOR: HandEvaluatorLookup = HandEvaluatorLookup::new();
     }
 
     #[cfg(debug_assertions)]

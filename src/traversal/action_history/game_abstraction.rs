@@ -60,14 +60,14 @@ impl GameAbstraction {
         // println!("Round {}, pot {}, bets {}, player {:?}", round, game_pot, bets_this_round, current_player);
         // println!("Round abstraction: \n{}", round_abstraction_un);
         // println!("");
-
+        // 10010
         let mut serialised = vec![];
         serialised.push(hole_cards.lower_card.to_int());
         serialised.push(hole_cards.higher_card.to_int());
-        serialised.push((bets_this_round << 4) | (hole_cards.suited as u8) << 1 | is_sb as u8);
-        serialised.extend(round_abstraction.clone());
+        serialised.push((bets_this_round << 4) | (hole_cards.suited as u8) << 1 | (is_sb as u8));
         serialised.push(game_pot);
         serialised.push(bets_this_round);
+        serialised.extend(round_abstraction.clone());
         serialised
     }
 }

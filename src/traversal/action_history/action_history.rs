@@ -1,3 +1,5 @@
+/// This is dead code, used to be used to track the history of actions in a game
+
 use core::panic;
 
 use itertools::Itertools;
@@ -131,6 +133,7 @@ pub fn validate_history(history: &Vec<Action>) {
         }
     }
 }
+
 
 // A live record of the game state that also acts as a key to the various strategies
 #[derive(Debug, Clone, PartialEq, Eq)]

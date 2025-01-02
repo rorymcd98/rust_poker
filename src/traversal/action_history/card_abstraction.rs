@@ -8,7 +8,7 @@ use std::fmt::Display;
 // Bucket ints to A-K, Q-9, 8-..
 fn bucket_rank(rank_int: usize) -> Rank {
     match rank_int {
-        2..5 => Rank::Five,
+        1..5 => Rank::Five,
         5..8 => Rank::Eight,
         8..11 => Rank::Queen,
         11..13 => Rank::Ace,
@@ -180,7 +180,6 @@ mod straight_abstraction_tests {
 
     #[rstest]
     #[case(0)]
-    #[case(1)]
     #[case(13)]
     #[case(14)]
     #[should_panic(expected = "Invalid rank int")]
@@ -627,12 +626,6 @@ pub fn get_flush_abstraction(
         hole_cards[0].rank.to_int()
     };
 
-    println!(
-        "most_flushing_player_rank: {}",
-        Rank::from_int(most_flushing_player_rank)
-    );
-    println!("rank as num: {}", most_flushing_player_rank);
-
     let mut beating_player_card = 0;
     for card in board_cards {
         if card.suit.to_int() == most_flush_suit_player as u8
@@ -642,17 +635,10 @@ pub fn get_flush_abstraction(
         }
     }
 
-    println!("beating_player_card: {}", beating_player_card);
-
     // E.g. Ace (12) has 0 cards beating it, meaning 0 missing cards (12 - 12 - 0 == 0)
     // E.g. Jack (9) might have 2 board cards beating it (let's say KQ), meaning 1 missing card (the ace) (12 - 9 - 2 == 1)
     // E.g. 5 (3) might have 4 board cards beating it (let's say 6789), meaning 5 missing cards (T-A) (12 - 3 - 4 == 5)
     let missing_cards_that_beat_player = 12 - most_flushing_player_rank - beating_player_card;
-
-    println!(
-        "missing_cards_that_beat_player: {}",
-        missing_cards_that_beat_player
-    );
 
     let player_flush_score = match missing_cards_that_beat_player {
         0 => 0,     // Nut flush

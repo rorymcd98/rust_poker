@@ -1,3 +1,5 @@
+/// This is dead code, used to be part of the action_history module
+
 use std::fmt::Display;
 
 use crate::models::card::Card;

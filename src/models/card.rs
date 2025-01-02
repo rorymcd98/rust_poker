@@ -64,7 +64,7 @@ impl Suit {
 
 pub type RankInt = u8;
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Default)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Default, Hash)]
 pub enum Rank {
     #[default]
     Two,
@@ -165,6 +165,14 @@ impl Rank {
     pub fn to_bit(&self) -> u32 {
         1 << self.to_int()
     }
+}
+
+pub fn all_rank_combos() -> Vec<(Rank, Rank)> {
+    (0..13).into_iter().combinations(2).map(|c| (Rank::from_int(c[0]), Rank::from_int(c[1]))).collect()
+}
+
+pub fn all_pocket_pairs() -> Vec<(Rank, Rank)> {
+    (0..13).into_iter().map(|c| (Rank::from_int(c), Rank::from_int(c))).collect()
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -370,35 +378,6 @@ impl Card {
         Self::all_suited_combos(suit).map(move |(a, b)| (hole_cards, (a, b)))
     }
 
-    pub fn all_suited_player_cards_combos(
-        suit: Suit,
-    ) -> impl Iterator<Item = ((Card, Card), (Card, Card))> {
-        // Generate combinations of 4 ranks, then group them into pairs in different ways
-        (0..13)
-            .combinations(4) // All combinations of 4 ranks
-            .flat_map(move |combo| {
-                // Generate all unique pairings of the 4 ranks
-                [
-                    ((combo[0], combo[1]), (combo[2], combo[3])),
-                    ((combo[0], combo[2]), (combo[1], combo[3])),
-                    ((combo[0], combo[3]), (combo[1], combo[2])),
-                ]
-                .into_iter()
-                .map(move |((a, b), (c, d))| {
-                    (
-                        (
-                            Card::new(suit, Rank::from_int(a)),
-                            Card::new(suit, Rank::from_int(b)),
-                        ),
-                        (
-                            Card::new(suit, Rank::from_int(c)),
-                            Card::new(suit, Rank::from_int(d)),
-                        ),
-                    )
-                })
-            })
-    }
-
     pub fn all_suited_combos(suit: Suit) -> impl Iterator<Item = (Card, Card)> {
         (0..12).flat_map(move |first_rank| {
             ((first_rank + 1)..13).map({
@@ -602,6 +581,12 @@ mod tests {
     }
 
     #[test]
+    fn test_all_rank_combos() {
+        let combos = all_rank_combos();
+        assert_eq!(combos.len(), 12 * 13 / 2);
+    }
+
+    #[test]
     fn all_suited_whole_card_combos() {
         // are unique, there are 78 of them, they are all sorted, they are all the same suit
         let combos = Card::all_suited_combos(Suit::Spades)
@@ -615,24 +600,6 @@ mod tests {
             assert_eq!(combo.0.suit, Suit::Spades);
             assert_eq!(combo.1.suit, Suit::Spades);
             assert!(combo.0.rank.to_int() < combo.1.rank.to_int());
-        }
-    }
-
-    #[test]
-    fn all_suited_player_cards_combos() {
-        // are unique, there are 2145 of them, they are all sorted, they are all the same suit
-        let combos = Card::all_suited_player_cards_combos(Suit::Spades).collect::<Vec<_>>();
-        assert_eq!(combos.len(), 2145);
-        let mut seen = HashSet::new();
-        for combo in combos {
-            assert!(!seen.contains(&combo));
-            seen.insert(combo);
-            assert_eq!(combo.0 .0.suit, Suit::Spades);
-            assert_eq!(combo.0 .1.suit, Suit::Spades);
-            assert_eq!(combo.1 .0.suit, Suit::Spades);
-            assert_eq!(combo.1 .1.suit, Suit::Spades);
-            assert!(combo.0 .0.rank.to_int() < combo.0 .1.rank.to_int());
-            assert!(combo.1 .0.rank.to_int() < combo.1 .1.rank.to_int());
         }
     }
 }

@@ -38,6 +38,7 @@ Main TODOs:
 
 Hand solver
 Split the strategy sampling into two phases where we skip actions with marginal actions
-Branch pruning
+Branch pruning (during and after training)
 Profiling
-
+Move the hole cards abstraction off of the branch
+Reduce the amoutn of cloning

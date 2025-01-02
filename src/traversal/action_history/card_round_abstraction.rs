@@ -5,8 +5,7 @@ use crate::{evaluate::generate_tables::remaining_hand_types::HandType, models::c
 use super::{
     board_abstraction::BoardAbstraction,
     card_abstraction::{
-        get_connected_card_abstraction, get_straight_abstraction, ConnectedCardsAbstraction,
-        FlushAbstraction, StraightAbstraction,
+        get_connected_card_abstraction, get_flush_abstraction, get_straight_abstraction, ConnectedCardsAbstraction, FlushAbstraction, StraightAbstraction
     },
 };
 
@@ -52,7 +51,7 @@ impl CardRoundAbstraction {
         let board_abstraction = BoardAbstraction::new(board_cards);
         let connected_cards_abstraction = get_connected_card_abstraction(hole_cards, board_cards);
         let straight_abstraction = get_straight_abstraction(hole_cards, board_cards);
-        let flush_abstraction = None;
+        let flush_abstraction = get_flush_abstraction(hole_cards, board_cards);
 
         CardRoundAbstraction {
             board_abstraction,
