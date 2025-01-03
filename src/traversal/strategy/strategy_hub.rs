@@ -102,7 +102,6 @@ impl<TStrategy: Strategy + Debug> StrategyHub<TStrategy> {
             if bb_strategy.is_some() {
                 let sb_strategy = self.sb_in_store.remove(&sb_key);
                 if sb_strategy.is_some() {
-                    println!("Pushing to queue");
                     self.out_queue.push(StrategyPair {
                         sb_branch: sb_strategy.unwrap().1,
                         bb_branch: bb_strategy.unwrap().1,
@@ -114,7 +113,7 @@ impl<TStrategy: Strategy + Debug> StrategyHub<TStrategy> {
         }
     }
 
-    pub fn return_elements(&self, pair: StrategyPair<TStrategy>) {
+    pub fn return_strategies(&self, pair: StrategyPair<TStrategy>) {
         match self.bb_in_store.insert(pair.bb_branch.strategy_hub_key.clone(), pair.bb_branch) {
             None => {},
             Some(old_val) => {
@@ -135,6 +134,28 @@ impl<TStrategy: Strategy + Debug> StrategyHub<TStrategy> {
         while let Ok(pair) = self.out_queue.pop() {
             res.insert(pair.bb_branch.strategy_hub_key.clone(), pair.bb_branch);
             res.insert(pair.sb_branch.strategy_hub_key.clone(), pair.sb_branch);
+        }
+        let sb_keys = self.sb_in_store.iter().map(|entry| entry.key().clone()).collect::<Vec<_>>();
+        let bb_keys = self.bb_in_store.iter().map(|entry| entry.key().clone()).collect::<Vec<_>>();
+        for key in sb_keys {
+            match self.sb_in_store.remove(&key) {
+                Some((_, strategy)) => {
+                    res.insert(key, strategy);
+                },
+                None => {
+                    panic!("Failed to remove sb strategy {:?}", key);
+                }
+            }
+        }
+        for key in bb_keys {
+            match self.bb_in_store.remove(&key) {
+                Some((_, strategy)) => {
+                    res.insert(key, strategy);
+                },
+                None => {
+                    panic!("Failed to remove bb strategy {:?}", key);
+                }
+            }
         }
         res
     }
@@ -186,12 +207,9 @@ pub fn serialise_strategy_hub(
     mut strategy_hub: StrategyHub<TrainingStrategy>,
 ) -> io::Result<()> {
     let strategy_hub = strategy_hub.into_map();
-
+    println!("Serializing strategy hub to {}", output_folder);
     // Ensure the output directory exists
     std::fs::create_dir_all(output_folder)?;
-
-    let mut strategy_size_bytes_compressed = 0;
-    let mut strategy_size_bytes_uncompressed = 0;
 
     for (strategy_key, strategy_branch) in strategy_hub {
         let path = format!(
@@ -202,6 +220,8 @@ pub fn serialise_strategy_hub(
             if strategy_key.is_suited { "suited" } else { "offsuit" },
             if strategy_key.is_sb { "sb" } else { "bb" }
         );
+
+        strategy_branch.print_stats();
 
         let serialized = serde_json::to_string(
             &strategy_branch.map.into_iter().map(|(k, v)| {
@@ -232,7 +252,7 @@ pub fn serialise_strategy_hub(
 
 
 
-pub fn decompress_and_deserialize_hub<TStrategy: Strategy + Debug>(blueprint_folder: &str) -> Result<StrategyHub<TStrategy>, io::Error> {
+pub fn deserialise_strategy_hub<TStrategy: Strategy + Debug>(blueprint_folder: &str) -> Result<StrategyHub<TStrategy>, io::Error> {
     fn parse_filename_to_strategy_element(filename: &str) -> Result<StrategyHubKey, io::Error> {
         let parts: Vec<&str> = filename.split('_').collect();
         if parts.len() != 4 {
@@ -286,6 +306,10 @@ pub fn decompress_and_deserialize_hub<TStrategy: Strategy + Debug>(blueprint_fol
             strategy_hub_key: strategy_hub_element_key,
             map,
         });
+    }
+
+    if strategy_hub_map.len() == 0 {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "No strategy hub elements found"));
     }
 
     println!("Successfully deserialized strategy hub with {} elements (compressed size {} MB, uncompressed size {} MB)", strategy_hub_map.len(), strategy_size_bytes_compressed/(1024*1024), strategy_size_bytes_uncompressed/(1024*1024));

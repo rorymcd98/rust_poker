@@ -269,7 +269,7 @@ impl Card {
         res
     }
 
-    pub fn new_random_9_card_game_with(
+    pub fn new_random_nine_card_game_with(
         card1: Card,
         card2: Card,
         card3: Card,
@@ -560,7 +560,7 @@ mod tests {
         let card3 = Card::new(Suit::Diamonds, Rank::Four);
         let card4 = Card::new(Suit::Clubs, Rank::King);
         for _ in 0..10_000 {
-            let cards = Card::new_random_9_card_game_with(card1, card2, card3, card4);
+            let cards = Card::new_random_nine_card_game_with(card1, card2, card3, card4);
             assert_eq!(cards.len(), 9);
             let mut seen = HashSet::new();
             for card in cards {
@@ -585,7 +585,7 @@ mod tests {
         let existing_cards = Card::new_random_cards(4);
         let start = Instant::now();
         for _ in 0..100_000 {
-            _ = Card::new_random_9_card_game_with(
+            _ = Card::new_random_nine_card_game_with(
                 existing_cards[0],
                 existing_cards[1],
                 existing_cards[2],

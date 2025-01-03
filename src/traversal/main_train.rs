@@ -1,4 +1,5 @@
 use rand::seq::SliceRandom;
+use rand::Rng;
 
 use crate::config::*;
 use super::game_state::game_state_helper::GameStateHelper;
@@ -6,7 +7,7 @@ use super::game_state::terminal_state::TerminalState;
 use super::strategy::strategy_trait::Strategy;
 use super::strategy::training_strategy::{sample_strategy, TrainingStrategy};
 use super::strategy::strategy_branch::{StrategyBranch, StrategyHubKey};
-use super::strategy::strategy_hub::{decompress_and_deserialize_hub, serialise_strategy_hub, StrategyHub, StrategyPair};
+use super::strategy::strategy_hub::{deserialise_strategy_hub, serialise_strategy_hub, StrategyHub, StrategyPair};
 use crate::models::card::{all_pocket_pairs, all_rank_combos};
 use crate::models::Card;
 use crate::models::Player;
@@ -22,6 +23,7 @@ pub fn begin_tree_train_traversal() {
     let strategy_hub = Arc::new(strategy_hub);
         
     let mut handles = vec![];
+    println!("Training with {} threads", NUM_THREADS);
     for _ in 0..NUM_THREADS {
         let strategy_hub_clone = Arc::clone(&strategy_hub);
         handles.push(spawn_training_thread_work(strategy_hub_clone));
@@ -35,47 +37,66 @@ pub fn begin_tree_train_traversal() {
     serialise_strategy_hub(BLUEPRINT_FOLDER, strategy_hub).expect("Failed to serialise strategy hub");
 }
 
-fn spawn_training_thread_work(mut strategy_hub: Arc<StrategyHub<TrainingStrategy>>) -> JoinHandle<()> {
-    fn second_suit(element: &StrategyBranch<TrainingStrategy>) -> Suit {
-        if element.strategy_hub_key.is_suited {
-            Suit::Spades
-        } else {
-            Suit::Clubs
-        }
+pub fn get_unique_cards(sb_key: &StrategyHubKey, bb_key: &StrategyHubKey) -> [Card; 4] {
+    let card1 = Card::new(Suit::Spades, sb_key.low_rank);
+    let mut card2 = Card::new(Suit::Spades, sb_key.high_rank);
+    let mut card3 = Card::new(Suit::Spades, bb_key.low_rank);
+    let mut card4 = Card::new(Suit::Spades, bb_key.high_rank);
+    
+    if !sb_key.is_suited {
+        card2.suit = Suit::Clubs; 
     }
 
+    with_rng(|rng| {
+        if card3 == card1 || card3 == card2 || rng.gen_bool(0.75) { // TODO - I'm not sure if these two 0.75 probabilities are correct but it is probabbly fine
+            card3.suit = Suit::Hearts;
+        }
+        if bb_key.is_suited {
+            card4.suit = card3.suit;
+            if card4 == card1 || card4 == card2 {
+                card3.suit = Suit::Hearts;
+                card4.suit = Suit::Hearts;
+            }
+        } else {
+            if card4 == card1 || card4 == card2 || card4 == card3 || rng.gen_bool(0.75) {
+                card4.suit = Suit::Diamonds;
+            }
+        }
+    });
+    [card1, card2, card3, card4]
+}
+
+fn spawn_training_thread_work(strategy_hub: Arc<StrategyHub<TrainingStrategy>>) -> JoinHandle<()> {
     thread::spawn(move || {
         let players = [Player::Traverser, Player::Opponent];
         // get all combos of sb_elements and bb_elements
         for i in 1..TRAIN_ITERATIONS {
-            if i % 500 == 0 {
-                println!("Training iteration {}", i);
-            }
             let training_bucket = strategy_hub.get_more_elements();
             let mut sb_branch = training_bucket.sb_branch;
             let mut bb_branch = training_bucket.bb_branch;
 
+            let cards = get_unique_cards(&sb_branch.strategy_hub_key, &bb_branch.strategy_hub_key);
+
             for player in players {
-                let deal = match player {
-                    Player::Traverser => Card::new_random_9_card_game_with(
-                        Card::new(Suit::Spades, sb_branch.strategy_hub_key.low_rank.clone()),
-                        Card::new(second_suit(&sb_branch), sb_branch.strategy_hub_key.high_rank.clone()),
-                        Card::new(Suit::Spades, bb_branch.strategy_hub_key.low_rank),
-                        Card::new(second_suit(&bb_branch), bb_branch.strategy_hub_key.high_rank),
+                let mut deal = match player {
+                    Player::Traverser => Card::new_random_nine_card_game_with(
+                        cards[0],
+                        cards[1],
+                        cards[2],
+                        cards[3],
                     ),
-                    Player::Opponent => Card::new_random_9_card_game_with(
-                        Card::new(Suit::Spades, bb_branch.strategy_hub_key.low_rank),
-                        Card::new(second_suit(&bb_branch), bb_branch.strategy_hub_key.high_rank.clone()),
-                        Card::new(Suit::Spades, sb_branch.strategy_hub_key.low_rank),
-                        Card::new(second_suit(&sb_branch), sb_branch.strategy_hub_key.high_rank.clone()),
+                    Player::Opponent => Card::new_random_nine_card_game_with(
+                        cards[2],
+                        cards[3],
+                        cards[0],
+                        cards[1],
                     ),
                 };
-
                 let mut branch_traverser = TrainingBranchTraverser::new(&mut sb_branch, &mut bb_branch, GameStateHelper::new(deal, player), i);
                 branch_traverser.begin_traversal();
             }
 
-            strategy_hub.return_elements(StrategyPair {
+            strategy_hub.return_strategies(StrategyPair {
                 sb_branch,
                 bb_branch,
             });
@@ -84,7 +105,7 @@ fn spawn_training_thread_work(mut strategy_hub: Arc<StrategyHub<TrainingStrategy
 }
 
 fn load_or_create_strategy_hub() -> StrategyHub<TrainingStrategy> {
-    decompress_and_deserialize_hub(BLUEPRINT_FOLDER).unwrap_or_else(|err| {
+    deserialise_strategy_hub(BLUEPRINT_FOLDER).unwrap_or_else(|err| {
         println!("Could not deserialise an existing strategy-hub, creating new strategy hub: {}", err);
         create_new_all_cards_strategy_hub()
     })
@@ -181,14 +202,7 @@ impl<'a> TrainingBranchTraverser<'a> {
             }
 
             let strategy = self.get_strategy();    
-            strategy.update_strategy(utility, &utilities, training_iteration);
-            // log the current strategy
-            // if self.training_iteration > 100 && self.game_state.is_river(){
-            //     let our_cards = self.game_state.get_current_player_cards();
-            //     let opp_cards = self.game_state.get_non_current_player_cards();
-            //     println!("Strategy for {}{} vs {}{}: {:?}", our_cards[0], our_cards[1], opp_cards[0], opp_cards[1], current_strategy);
-            //     println!("strategy updates {} .", strategy.updates);
-            // }        
+            strategy.update_strategy(utility, &utilities, training_iteration);   
             utility
         }
     }

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Display};
 use crate::{models::card::Rank, traversal::action_history::game_abstraction::GameAbstractionSerialised};
 
 use super::strategy_trait::Strategy;
@@ -9,6 +9,19 @@ pub struct StrategyHubKey {
     pub high_rank: Rank,
     pub is_suited: bool,
     pub is_sb: bool,
+}
+
+impl Display for StrategyHubKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}{}{}{}",
+            self.low_rank,
+            self.high_rank,
+            if self.is_suited { "s" } else { "o" },
+            if self.is_sb { "SB" } else { "BB" }
+        )
+    }
 }
 
 #[derive(Debug, Default)]
@@ -42,7 +55,8 @@ impl<TStrategy: Strategy> StrategyBranch<TStrategy> {
             size_in_mb += std::mem::size_of_val(info_set) + std::mem::size_of_val(strategy);
         }
         println!(
-            "Strategy branch, elements: {} size: {} MB",
+            "Strategy branch for {}, elements: {} size: {} MB",
+            self.strategy_hub_key,
             self.map.len(),
             size_in_mb / 1024 / 1024
         );
