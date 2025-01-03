@@ -141,8 +141,8 @@ impl HandLookup for HandLookupArrays {
     }
 }
 
-/// Evaluate a group of 5 cards to between 1 and 7937
-/// 7937 is a Royal Flush
+/// Evaluate a group of 5 cards to between 1 and 7463
+/// 7463 is a Royal Flush
 /// 1 is a High Card 7
 pub trait HandEvaluator {
     fn evaluate(&self, cards: [Card; 5]) -> u16;
@@ -155,6 +155,7 @@ pub struct HandEvaluatorLookup {
 
 impl HandEvaluatorLookup {
     pub fn new() -> Self {
+        println!("Generating hand lookup tables...");
         HandEvaluatorLookup {
             hand_lookup: HandLookupArrays::new(),
         }
@@ -249,7 +250,6 @@ impl HandEvaluatorLookup {
 // Full house:          7140 - 7296
 // Four of a kind:      7296 - 7452
 // Straight flush:      7452 - 7462
-
 #[cfg(test)]
 mod tests {
     use super::*;

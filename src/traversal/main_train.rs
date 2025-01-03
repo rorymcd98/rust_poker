@@ -3,11 +3,10 @@ use rand::seq::SliceRandom;
 use crate::config::*;
 use super::game_state::game_state_helper::GameStateHelper;
 use super::game_state::terminal_state::TerminalState;
-use super::strategy;
 use super::strategy::strategy_trait::Strategy;
 use super::strategy::training_strategy::{sample_strategy, TrainingStrategy};
-use super::strategy::strategy_branch::{StrategyBranch, StrategyHubElement};
-use super::strategy::strategy_hub::{StrategyHub, StrategyHubBucket};
+use super::strategy::strategy_branch::{StrategyBranch, StrategyHubKey};
+use super::strategy::strategy_hub::{decompress_and_deserialize_hub, serialise_strategy_hub, StrategyHub, StrategyPair};
 use crate::models::card::{all_pocket_pairs, all_rank_combos};
 use crate::models::Card;
 use crate::models::Player;
@@ -18,37 +17,8 @@ use std::sync::Arc;
 use std::thread;
 use std::thread::JoinHandle;
 
-
 pub fn begin_tree_train_traversal() {
-    let all_rank_combos = all_rank_combos();
-    let mut sb_elements = all_rank_combos
-        .iter()
-        .map(|(low, high)| StrategyHubElement{low_rank: *low, high_rank: *high, is_sb: true, is_suited: true})
-        .collect::<Vec<StrategyHubElement>>();
-    sb_elements.extend(
-        all_rank_combos
-            .iter()
-            .map(|(low, high)| StrategyHubElement{low_rank: *low, high_rank: *high, is_sb: true, is_suited: false})
-            .collect::<Vec<StrategyHubElement>>(),
-    );
-    sb_elements.extend(
-        all_pocket_pairs().iter().map(|rank| StrategyHubElement{low_rank: rank.0, high_rank: rank.1, is_sb: true, is_suited: false})
-    );
-
-    let bb_elements = sb_elements.clone().into_iter().map(|element| StrategyHubElement{is_sb: false, ..element}).collect::<Vec<StrategyHubElement>>();
-
-    let strategy_hub = StrategyHub::new(bb_elements.len(), STRATEGY_HUB_TAKE, STRATEGY_HUB_RESERVE);
-    with_rng(|rng| {
-        let mut sb_strategies: Vec<StrategyBranch<TrainingStrategy>> = sb_elements.iter().map(|element| StrategyBranch::new(element.clone())).collect();
-        let mut bb_strategies: Vec<StrategyBranch<TrainingStrategy>> = bb_elements.iter().map(|element| StrategyBranch::new(element.clone())).collect();
-        sb_strategies.shuffle(rng);
-        bb_strategies.shuffle(rng);
-        strategy_hub.return_elements(StrategyHubBucket {
-            sb_strategies,
-            bb_strategies,
-        });
-    });
-
+    let strategy_hub = load_or_create_strategy_hub();
     let strategy_hub = Arc::new(strategy_hub);
         
     let mut handles = vec![];
@@ -61,22 +31,13 @@ pub fn begin_tree_train_traversal() {
         let _ = handle.join().unwrap();
     }
 
-    let map = Arc::try_unwrap(strategy_hub).expect("Arc has more than one strong reference").into_map();
-
-    // for s in sb_elements{
-    //     println!("{:?},", s);
-    //     map.get(&s).unwrap().print_stats();
-    // }
-
-    // for s in bb_elements{
-    //     println!("{:?}", s);
-    //     map.get(&s).unwrap().print_stats();
-    // }
+    let strategy_hub = Arc::try_unwrap(strategy_hub).expect("Arc has more than one strong reference");
+    serialise_strategy_hub(BLUEPRINT_FOLDER, strategy_hub).expect("Failed to serialise strategy hub");
 }
 
-fn spawn_training_thread_work(strategy_hub: Arc<StrategyHub<TrainingStrategy>>) -> JoinHandle<()> {
+fn spawn_training_thread_work(mut strategy_hub: Arc<StrategyHub<TrainingStrategy>>) -> JoinHandle<()> {
     fn second_suit(element: &StrategyBranch<TrainingStrategy>) -> Suit {
-        if element.strategy_hub_element.is_suited {
+        if element.strategy_hub_key.is_suited {
             Suit::Spades
         } else {
             Suit::Clubs
@@ -87,40 +48,74 @@ fn spawn_training_thread_work(strategy_hub: Arc<StrategyHub<TrainingStrategy>>) 
         let players = [Player::Traverser, Player::Opponent];
         // get all combos of sb_elements and bb_elements
         for i in 1..TRAIN_ITERATIONS {
-            println!("Training iteration {}", i);
-            let training_bucket = strategy_hub.get_more_elements();
-            let sb_bucket_cell = RefCell::new(training_bucket.sb_strategies);
-            let bb_bucket_cell = RefCell::new(training_bucket.bb_strategies); 
-
-            for sb_branch in &mut sb_bucket_cell.borrow_mut().iter_mut() {
-                for bb_branch in &mut bb_bucket_cell.borrow_mut().iter_mut() {
-                    for player in players {
-                        let deal = match player {
-                            Player::Traverser => Card::new_random_9_card_game_with(
-                                Card::new(Suit::Spades, sb_branch.strategy_hub_element.low_rank.clone()),
-                                Card::new(second_suit(&sb_branch), sb_branch.strategy_hub_element.high_rank.clone()),
-                                Card::new(Suit::Spades, bb_branch.strategy_hub_element.low_rank),
-                                Card::new(second_suit(&bb_branch), bb_branch.strategy_hub_element.high_rank),
-                            ),
-                            Player::Opponent => Card::new_random_9_card_game_with(
-                                Card::new(Suit::Spades, bb_branch.strategy_hub_element.low_rank),
-                                Card::new(second_suit(&bb_branch), bb_branch.strategy_hub_element.high_rank.clone()),
-                                Card::new(Suit::Spades, sb_branch.strategy_hub_element.low_rank),
-                                Card::new(second_suit(&sb_branch), sb_branch.strategy_hub_element.high_rank.clone()),
-                            ),
-                        };
-
-                        let mut branch_traverser = TrainingBranchTraverser::new(sb_branch, bb_branch, GameStateHelper::new(deal, player), i);
-                        branch_traverser.begin_traversal();
-                    }
-                }
+            if i % 500 == 0 {
+                println!("Training iteration {}", i);
             }
-            strategy_hub.return_elements(StrategyHubBucket {
-                sb_strategies: sb_bucket_cell.into_inner(),
-                bb_strategies: bb_bucket_cell.into_inner(),
+            let training_bucket = strategy_hub.get_more_elements();
+            let mut sb_branch = training_bucket.sb_branch;
+            let mut bb_branch = training_bucket.bb_branch;
+
+            for player in players {
+                let deal = match player {
+                    Player::Traverser => Card::new_random_9_card_game_with(
+                        Card::new(Suit::Spades, sb_branch.strategy_hub_key.low_rank.clone()),
+                        Card::new(second_suit(&sb_branch), sb_branch.strategy_hub_key.high_rank.clone()),
+                        Card::new(Suit::Spades, bb_branch.strategy_hub_key.low_rank),
+                        Card::new(second_suit(&bb_branch), bb_branch.strategy_hub_key.high_rank),
+                    ),
+                    Player::Opponent => Card::new_random_9_card_game_with(
+                        Card::new(Suit::Spades, bb_branch.strategy_hub_key.low_rank),
+                        Card::new(second_suit(&bb_branch), bb_branch.strategy_hub_key.high_rank.clone()),
+                        Card::new(Suit::Spades, sb_branch.strategy_hub_key.low_rank),
+                        Card::new(second_suit(&sb_branch), sb_branch.strategy_hub_key.high_rank.clone()),
+                    ),
+                };
+
+                let mut branch_traverser = TrainingBranchTraverser::new(&mut sb_branch, &mut bb_branch, GameStateHelper::new(deal, player), i);
+                branch_traverser.begin_traversal();
+            }
+
+            strategy_hub.return_elements(StrategyPair {
+                sb_branch,
+                bb_branch,
             });
         }
     })
+}
+
+fn load_or_create_strategy_hub() -> StrategyHub<TrainingStrategy> {
+    decompress_and_deserialize_hub(BLUEPRINT_FOLDER).unwrap_or_else(|err| {
+        println!("Could not deserialise an existing strategy-hub, creating new strategy hub: {}", err);
+        create_new_all_cards_strategy_hub()
+    })
+}
+
+fn create_new_all_cards_strategy_hub() -> StrategyHub<TrainingStrategy> {
+    let all_rank_combos = all_rank_combos();
+    let mut sb_elements = all_rank_combos
+        .iter()
+        .map(|(low, high)| StrategyHubKey{low_rank: *low, high_rank: *high, is_sb: true, is_suited: true})
+        .collect::<Vec<StrategyHubKey>>();
+    sb_elements.extend(
+        all_rank_combos
+            .iter()
+            .map(|(low, high)| StrategyHubKey{low_rank: *low, high_rank: *high, is_sb: true, is_suited: false})
+            .collect::<Vec<StrategyHubKey>>(),
+    );
+    sb_elements.extend(
+        all_pocket_pairs().iter().map(|rank| StrategyHubKey{low_rank: rank.0, high_rank: rank.1, is_sb: true, is_suited: false})
+    );
+
+    let bb_elements = sb_elements.clone().into_iter().map(|element| StrategyHubKey{is_sb: false, ..element}).collect::<Vec<StrategyHubKey>>();
+
+    let strategy_hub = StrategyHub::new(
+        bb_elements
+            .into_iter()
+            .chain(sb_elements.into_iter())
+            .map(|key| StrategyBranch::new(key))
+            .collect()
+    );
+    strategy_hub
 }
 
 struct TrainingBranchTraverser<'a> {

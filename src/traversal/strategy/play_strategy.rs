@@ -1,9 +1,8 @@
-use itertools::Itertools;
-
 use crate::traversal::action_history::action::DEFAULT_ACTION_COUNT;
 
 use super::{strategy_trait::Strategy, training_strategy::{self, TrainingStrategy}};
 
+#[derive(Debug)]
 pub struct PlayStrategy {
     pub actions: usize,
     pub play_strategy: [f32; DEFAULT_ACTION_COUNT],
@@ -16,6 +15,14 @@ impl Strategy for PlayStrategy {
 
     fn get_current_strategy(&self, _iteration: usize) -> [f32; DEFAULT_ACTION_COUNT] {
         self.play_strategy
+    }
+
+    fn from_existing_strategy(actions: usize, strategy: [f32; DEFAULT_ACTION_COUNT]) -> PlayStrategy {
+        PlayStrategy { actions, play_strategy: strategy }
+    }
+
+    fn get_actions(&self) -> usize {
+        self.actions
     }
 }
 
@@ -43,13 +50,5 @@ impl PlayStrategy {
 
     pub fn serialise(&self) -> Vec<f32> {
         self.play_strategy.to_vec()
-    }
-
-    pub fn deserialise(serialised: Vec<f32>) -> PlayStrategy {
-        let mut play_strategy = [0f32; DEFAULT_ACTION_COUNT];
-        for (i, val) in serialised.iter().enumerate() {
-            play_strategy[i] = *val;
-        }
-        PlayStrategy { actions: if (play_strategy[2] > 0.0001) {3} else {2}, play_strategy }
     }
 }

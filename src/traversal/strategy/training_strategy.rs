@@ -55,6 +55,20 @@ impl Strategy for TrainingStrategy {
             self.vanilla_strategy_update()
         }
     }
+
+    fn from_existing_strategy(actions: usize, strategy: [f32; DEFAULT_ACTION_COUNT]) -> Self {
+        TrainingStrategy {
+            actions: actions,
+            strategy_sum: [0f32; DEFAULT_ACTION_COUNT],
+            regrets_sum: [0f32; DEFAULT_ACTION_COUNT],
+            current_strategy: strategy,
+            updates: 0,
+        }
+    }
+
+    fn get_actions(&self) -> usize {
+        self.actions
+    }
 }
 
 impl TrainingStrategy {

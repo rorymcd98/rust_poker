@@ -1,3 +1,5 @@
+pub const BLUEPRINT_FOLDER: &str = "./blueprint/";
+
 //// Game rules
 pub const SMALL_BLIND: u8 = 1;
 pub const BIG_BLIND: u8 = 2;

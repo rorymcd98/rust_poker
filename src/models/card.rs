@@ -1,9 +1,8 @@
 use crate::thread_utils::with_rng;
 use itertools::Itertools;
-use rand::Rng;
+use rand::{seq::SliceRandom, Rng};
 use std::{
-    fmt::{Display, Formatter},
-    hash::{Hash, Hasher},
+    array, fmt::{Display, Formatter}, hash::{Hash, Hasher}, str::FromStr
 };
 
 // 2 for traverser, 2 for opponent, 5 for board
@@ -103,6 +102,29 @@ impl Display for Rank {
                 Rank::Ace => "A",
             }
         )
+    }
+}
+
+impl FromStr for Rank {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "2" => Ok(Rank::Two),
+            "3" => Ok(Rank::Three),
+            "4" => Ok(Rank::Four),
+            "5" => Ok(Rank::Five),
+            "6" => Ok(Rank::Six),
+            "7" => Ok(Rank::Seven),
+            "8" => Ok(Rank::Eight),
+            "9" => Ok(Rank::Nine),
+            "T" => Ok(Rank::Ten),
+            "J" => Ok(Rank::Jack),
+            "Q" => Ok(Rank::Queen),
+            "K" => Ok(Rank::King),
+            "A" => Ok(Rank::Ace),
+            _ => Err(()),
+        }
     }
 }
 
@@ -409,6 +431,12 @@ impl Card {
             })
         })
     }
+
+    pub fn shuffle_deck() -> [Card; 52] {
+        let mut deck = array::from_fn(|i| Card::from_int(i as u8));
+        with_rng(|rng| deck.shuffle(rng));
+        deck
+    }
 }
 
 impl Default for Card {
@@ -435,7 +463,7 @@ mod tests {
     use super::*;
     use rstest::rstest;
     use std::{
-        collections::{HashMap, HashSet},
+        collections::HashSet,
         time::Instant,
     };
 
