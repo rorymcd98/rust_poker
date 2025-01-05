@@ -21,8 +21,8 @@ pub struct StrategyPair<TStrategy: Strategy> {
 #[derive(Debug)]
 pub struct StrategyHub<TStrategy: Strategy + Debug> {
     out_queue: ConcurrentQueue<StrategyPair<TStrategy>>,
-    bb_in_store: DashMap<StrategyHubKey, StrategyBranch<TStrategy>>,
-    sb_in_store: DashMap<StrategyHubKey, StrategyBranch<TStrategy>>,
+    pub bb_in_store: DashMap<StrategyHubKey, StrategyBranch<TStrategy>>,
+    pub sb_in_store: DashMap<StrategyHubKey, StrategyBranch<TStrategy>>,
 }
 
 impl<TStrategy: Strategy + Debug> StrategyHub<TStrategy> {
@@ -129,7 +129,7 @@ impl<TStrategy: Strategy + Debug> StrategyHub<TStrategy> {
         };
     } 
 
-    pub fn into_map(&mut self) -> HashMap<StrategyHubKey, StrategyBranch<TStrategy>> {
+    pub fn into_map(self) -> HashMap<StrategyHubKey, StrategyBranch<TStrategy>> {
         let mut res = HashMap::new();
         while let Ok(pair) = self.out_queue.pop() {
             res.insert(pair.bb_branch.strategy_hub_key.clone(), pair.bb_branch);
@@ -207,7 +207,7 @@ pub fn serialise_strategy_hub(
     mut strategy_hub: StrategyHub<TrainingStrategy>,
 ) -> io::Result<()> {
     let strategy_hub = strategy_hub.into_map();
-    println!("Serializing strategy hub to {}", output_folder);
+    println!("serialising strategy hub to {}", output_folder);
     // Ensure the output directory exists
     std::fs::create_dir_all(output_folder)?;
 
@@ -223,7 +223,7 @@ pub fn serialise_strategy_hub(
 
         strategy_branch.print_stats();
 
-        let serialized = serde_json::to_string(
+        let serialised = serde_json::to_string(
             &strategy_branch.map.into_iter().map(|(k, v)| {
                 (
                     base64::engine::general_purpose::STANDARD.encode(&k),
@@ -239,7 +239,7 @@ pub fn serialise_strategy_hub(
 
         let compressed_bytes = {
             let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-            encoder.write_all(serialized.as_bytes())?;
+            encoder.write_all(serialised.as_bytes())?;
             encoder.finish()?
         };
 
@@ -251,8 +251,7 @@ pub fn serialise_strategy_hub(
 }
 
 
-
-pub fn deserialise_strategy_hub<TStrategy: Strategy + Debug>(blueprint_folder: &str) -> Result<StrategyHub<TStrategy>, io::Error> {
+pub fn deserialise_strategy_hub<TStrategy: Strategy + Debug>(blueprint_folder: &str) -> Result<HashMap<StrategyHubKey, StrategyBranch<TStrategy>>, io::Error> {
     fn parse_filename_to_strategy_element(filename: &str) -> Result<StrategyHubKey, io::Error> {
         let parts: Vec<&str> = filename.split('_').collect();
         if parts.len() != 4 {
@@ -267,7 +266,7 @@ pub fn deserialise_strategy_hub<TStrategy: Strategy + Debug>(blueprint_folder: &
         })
     }
 
-    println!("Deserializing strategy hub from {}", blueprint_folder);
+    println!("Deserialising strategy hub from {}", blueprint_folder);
 
     let mut strategy_hub_map = HashMap::new();
     let mut strategy_size_bytes_compressed = 0;
@@ -282,7 +281,8 @@ pub fn deserialise_strategy_hub<TStrategy: Strategy + Debug>(blueprint_folder: &
         let mut decompressed_data = String::new();
         GzDecoder::new(File::open(&path)?).read_to_string(&mut decompressed_data)?;
 
-        let deserialized: HashMap<String, [f32; DEFAULT_ACTION_COUNT + 1]> = serde_json::from_str(&decompressed_data)?;
+        // The +1 is for the number of actions - these are stored in cell 0
+        let deserialised: HashMap<String, [f32; DEFAULT_ACTION_COUNT + 1]> = serde_json::from_str(&decompressed_data)?;
 
         let strategy_hub_element_key = parse_filename_to_strategy_element({
                 strategy_size_bytes_compressed += path.metadata()?.len();
@@ -291,7 +291,9 @@ pub fn deserialise_strategy_hub<TStrategy: Strategy + Debug>(blueprint_folder: &
             }
         )?;
 
-        let map = deserialized.into_iter().map(|(k, v)| {
+        println!("Deserialising strategy hub element {}", strategy_hub_element_key);
+
+        let map = deserialised.into_iter().map(|(k, v)| {
             let infoset_key = base64::engine::general_purpose::STANDARD.decode(&k).map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "Invalid base64 key"))?;
             let mut array = [0.0; DEFAULT_ACTION_COUNT];
             array.copy_from_slice(&v[1..]);
@@ -305,6 +307,7 @@ pub fn deserialise_strategy_hub<TStrategy: Strategy + Debug>(blueprint_folder: &
         strategy_hub_map.insert(strategy_hub_element_key.clone(), StrategyBranch {
             strategy_hub_key: strategy_hub_element_key,
             map,
+            new_generated: 0,
         });
     }
 
@@ -312,6 +315,6 @@ pub fn deserialise_strategy_hub<TStrategy: Strategy + Debug>(blueprint_folder: &
         return Err(io::Error::new(io::ErrorKind::InvalidData, "No strategy hub elements found"));
     }
 
-    println!("Successfully deserialized strategy hub with {} elements (compressed size {} MB, uncompressed size {} MB)", strategy_hub_map.len(), strategy_size_bytes_compressed/(1024*1024), strategy_size_bytes_uncompressed/(1024*1024));
-    StrategyHub::<TStrategy>::from_map(strategy_hub_map).map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+    println!("Successfully deserialised strategy hub with {} elements (compressed size {} MB, uncompressed size {} MB)", strategy_hub_map.len(), strategy_size_bytes_compressed/(1024*1024), strategy_size_bytes_uncompressed/(1024*1024));
+    Ok(strategy_hub_map)
 }

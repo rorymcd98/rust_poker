@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::{evaluate::generate_tables::remaining_hand_types::HandType, models::card::Card};
+use crate::{evaluate::generate_tables::remaining_hand_types::HandType, models::card::{Card, Rank}};
 
 use super::{
     board_abstraction::BoardAbstraction,
@@ -11,6 +11,7 @@ use super::{
 
 pub type CardRoundAbstractionSerialised = Vec<u8>;
 
+#[derive(Default)]
 pub struct CardRoundAbstraction {
     pub board_abstraction: BoardAbstraction,
     pub connected_cards_abstraction: Option<ConnectedCardsAbstraction>,
@@ -37,7 +38,7 @@ impl Display for CardRoundAbstraction {
 
         write!(
             f,
-            "Board {}\nConnected Cards: {}\nStraight: {}\nFlush: {}",
+            "Board {} Connected Cards: {} Straight: {} Flush: {}",
             self.board_abstraction,
             connected_cards_display,
             straight_cards_display,
@@ -62,18 +63,7 @@ impl CardRoundAbstraction {
     }
 
     pub fn serialise(&self) -> CardRoundAbstractionSerialised {
-        let mut serialised = vec![];
-        serialised.push(self.board_abstraction.max_consecutive_cards);
-        serialised.push(self.board_abstraction.suit_count_abstraction);
-        let hand_type_serialised = match self.board_abstraction.board_hand_type {
-            HandType::Pair(_) => 1,
-            HandType::TwoPair(_, _) => 2,
-            HandType::ThreeOfAKind(_) => 3,
-            HandType::FullHouse(_, _) => 4,
-            HandType::FourOfAKind(_) => 5,
-            HandType::None => 0,
-        };
-        serialised.push(hand_type_serialised);
+        let mut serialised = self.board_abstraction.serialise();
 
         if let Some(connected_cards_abstraction) = &self.connected_cards_abstraction {
             serialised.push(connected_cards_abstraction.serialise());
@@ -94,5 +84,34 @@ impl CardRoundAbstraction {
         }
 
         serialised
+    }
+
+    pub fn deserialise(serialised: &[u8]) -> CardRoundAbstraction {
+        let board_abstraction = BoardAbstraction::deserialise(&serialised[0..3]);
+
+        let connected_cards_abstraction = if serialised[3] == 0 {
+            None
+        } else {
+            Some(ConnectedCardsAbstraction::deserialise(&serialised[3]))
+        };
+
+        let straight_abstraction = if serialised[4] == 0 {
+            None
+        } else {
+            Some(StraightAbstraction::deserialise(&serialised[4]))
+        };
+
+        let flush_abstraction = if serialised[5] == 0 {
+            None
+        } else {
+            Some(FlushAbstraction::deserialise(&serialised[6]))
+        };
+
+        CardRoundAbstraction {
+            board_abstraction,
+            connected_cards_abstraction,
+            straight_abstraction,
+            flush_abstraction,
+        }
     }
 }

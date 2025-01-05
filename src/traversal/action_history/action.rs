@@ -1,12 +1,11 @@
-/// This is dead code, used to be part of the action_history module
-
+/// Most of the code in here is dead, we're now just using this for subgame solving
 use std::fmt::Display;
 
 use crate::models::card::Card;
 
 pub const DEFAULT_ACTION_COUNT: usize = 3;
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub enum Action {
     CheckFold,
     Call,

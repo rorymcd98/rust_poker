@@ -1,7 +1,6 @@
-use rand::seq::SliceRandom;
 use rand::Rng;
-
 use crate::config::*;
+use crate::validation::validate_strategy_map;
 use super::game_state::game_state_helper::GameStateHelper;
 use super::game_state::terminal_state::TerminalState;
 use super::strategy::strategy_trait::Strategy;
@@ -13,7 +12,6 @@ use crate::models::Card;
 use crate::models::Player;
 use crate::models::Suit;
 use crate::thread_utils::with_rng;
-use std::cell::RefCell;
 use std::sync::Arc;
 use std::thread;
 use std::thread::JoinHandle;
@@ -33,7 +31,8 @@ pub fn begin_tree_train_traversal() {
         let _ = handle.join().unwrap();
     }
 
-    let strategy_hub = Arc::try_unwrap(strategy_hub).expect("Arc has more than one strong reference");
+    let strategy_hub: StrategyHub<TrainingStrategy> = Arc::try_unwrap(strategy_hub).expect("Arc has more than one strong reference");
+    // validate_strategy_map::<TrainingStrategy>(&strategy_hub.into_map());
     serialise_strategy_hub(BLUEPRINT_FOLDER, strategy_hub).expect("Failed to serialise strategy hub");
 }
 
@@ -71,6 +70,9 @@ fn spawn_training_thread_work(strategy_hub: Arc<StrategyHub<TrainingStrategy>>) 
         let players = [Player::Traverser, Player::Opponent];
         // get all combos of sb_elements and bb_elements
         for i in 1..TRAIN_ITERATIONS {
+            if i % ITERATION_UPDATES == 0 {
+                println!("Training iteration: {}/{}", i, TRAIN_ITERATIONS);
+            } 
             let training_bucket = strategy_hub.get_more_elements();
             let mut sb_branch = training_bucket.sb_branch;
             let mut bb_branch = training_bucket.bb_branch;
@@ -78,7 +80,7 @@ fn spawn_training_thread_work(strategy_hub: Arc<StrategyHub<TrainingStrategy>>) 
             let cards = get_unique_cards(&sb_branch.strategy_hub_key, &bb_branch.strategy_hub_key);
 
             for player in players {
-                let mut deal = match player {
+                let deal = match player {
                     Player::Traverser => Card::new_random_nine_card_game_with(
                         cards[0],
                         cards[1],
@@ -105,28 +107,35 @@ fn spawn_training_thread_work(strategy_hub: Arc<StrategyHub<TrainingStrategy>>) 
 }
 
 fn load_or_create_strategy_hub() -> StrategyHub<TrainingStrategy> {
-    deserialise_strategy_hub(BLUEPRINT_FOLDER).unwrap_or_else(|err| {
-        println!("Could not deserialise an existing strategy-hub, creating new strategy hub: {}", err);
-        create_new_all_cards_strategy_hub()
-    })
+    match deserialise_strategy_hub(BLUEPRINT_FOLDER) {
+        Ok(strategy_hub) => StrategyHub::from_map(strategy_hub).unwrap(),
+        Err(err) => {
+            println!("Could not deserialise an existing strategy-hub, creating new strategy hub: {}", err);
+            create_new_all_cards_strategy_hub()
+        }
+    }
 }
 
-fn create_new_all_cards_strategy_hub() -> StrategyHub<TrainingStrategy> {
+pub fn get_all_combos_by_blind(is_smallblind: bool) -> Vec<StrategyHubKey> {
     let all_rank_combos = all_rank_combos();
     let mut sb_elements = all_rank_combos
         .iter()
-        .map(|(low, high)| StrategyHubKey{low_rank: *low, high_rank: *high, is_sb: true, is_suited: true})
+        .map(|(low, high)| StrategyHubKey{low_rank: *low, high_rank: *high, is_sb: is_smallblind, is_suited: true})
         .collect::<Vec<StrategyHubKey>>();
     sb_elements.extend(
         all_rank_combos
             .iter()
-            .map(|(low, high)| StrategyHubKey{low_rank: *low, high_rank: *high, is_sb: true, is_suited: false})
+            .map(|(low, high)| StrategyHubKey{low_rank: *low, high_rank: *high, is_sb: is_smallblind, is_suited: false})
             .collect::<Vec<StrategyHubKey>>(),
     );
     sb_elements.extend(
-        all_pocket_pairs().iter().map(|rank| StrategyHubKey{low_rank: rank.0, high_rank: rank.1, is_sb: true, is_suited: false})
+        all_pocket_pairs().iter().map(|rank| StrategyHubKey{low_rank: rank.0, high_rank: rank.1, is_sb: is_smallblind, is_suited: false})
     );
+    sb_elements
+}
 
+fn create_new_all_cards_strategy_hub() -> StrategyHub<TrainingStrategy> {
+    let sb_elements = get_all_combos_by_blind(true);
     let bb_elements = sb_elements.clone().into_iter().map(|element| StrategyHubKey{is_sb: false, ..element}).collect::<Vec<StrategyHubKey>>();
 
     let strategy_hub = StrategyHub::new(
@@ -201,7 +210,10 @@ impl<'a> TrainingBranchTraverser<'a> {
                 utility += utilities[action] * current_strategy[action];
             }
 
-            let strategy = self.get_strategy();    
+            {
+                // println!("updating strategy for gamestate {} . {:?}", self.game_state.current_state_as_string(), utilities);
+            } 
+            let strategy = self.get_strategy();   
             strategy.update_strategy(utility, &utilities, training_iteration);   
             utility
         }

@@ -63,7 +63,7 @@ impl Suit {
 
 pub type RankInt = u8;
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Default, Hash)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Default, Hash, Ord, PartialOrd)]
 pub enum Rank {
     #[default]
     Two,
@@ -325,7 +325,7 @@ impl Card {
         (suit << 4) | rank
     }
 
-    pub fn get_n_more_cards(existing_cards: &Vec<Card>, n: usize) -> Vec<Card> {
+    pub fn get_n_more_cards(existing_cards: &[Card], n: usize) -> Vec<Card> {
         let mut taken = [false; 52];
         for card in existing_cards {
             taken[card.to_int() as usize] = true;
@@ -615,7 +615,7 @@ mod tests {
     }
 
     #[test]
-    fn all_suited_whole_card_combos() {
+    fn all_suited_hole_card_combos() {
         // are unique, there are 78 of them, they are all sorted, they are all the same suit
         let combos = Card::all_suited_combos(Suit::Spades)
             .into_iter()

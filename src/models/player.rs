@@ -1,3 +1,5 @@
+use std::{fmt::Display};
+
 const TRAVERSER_BYTE: u8 = 0b10000000;
 const OPPONENT_BYTE: u8 = 0b01000000;
 
@@ -5,6 +7,21 @@ const OPPONENT_BYTE: u8 = 0b01000000;
 pub enum Player {
     Traverser,
     Opponent,
+}
+
+impl Default for Player {
+    fn default() -> Self {
+        Player::Traverser
+    }
+}
+
+impl Display for Player {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Player::Traverser => write!(f, "Tra"),
+            Player::Opponent => write!(f, "Opp"),
+        }
+    }
 }
 
 impl Player {

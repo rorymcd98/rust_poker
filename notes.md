@@ -42,3 +42,4 @@ Branch pruning (during and after training)
 Profiling
 Move the hole cards abstraction off of the branch
 Reduce the amoutn of cloning
+Do a unit test for split pot evaluations

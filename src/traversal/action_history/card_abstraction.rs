@@ -40,6 +40,17 @@ impl StraightAbstraction {
         let requires_gutshot = self.requires_gutshot as u8;
         (highest_card << 4) | (cards_in_straight << 1) | requires_gutshot
     }
+
+    pub fn deserialise(serialised: &u8) -> StraightAbstraction {
+        let highest_card = Rank::from_int((serialised >> 4) as u8);
+        let cards_in_straight = (serialised >> 1) & 0b111;
+        let requires_gutshot = (serialised & 0b1) == 1;
+        StraightAbstraction {
+            bucketed_high_card: highest_card,
+            cards_in_straight,
+            requires_gutshot,
+        }
+    }
 }
 
 // TODO - method needs refactoring!
@@ -566,7 +577,14 @@ impl Display for FlushAbstraction {
 
 impl FlushAbstraction {
     pub fn serialise(&self) -> u8 {
-        (self.flush_score << 1) | self.cards_to_draw + 1 // +1 to avoid parity with None
+        (self.flush_score << 2) | self.cards_to_draw + 1 // +1 to avoid parity with None
+    }
+
+    pub fn deserialise(serialised: &u8) -> FlushAbstraction {
+        FlushAbstraction {
+            flush_score: (serialised >> 2) & 0b11,
+            cards_to_draw: (serialised & 0b11) - 1,
+        }
     }
 }
 
@@ -581,7 +599,7 @@ pub fn get_flush_abstraction(
     hole_cards: &[Card; 2],
     board_cards: &[Card],
 ) -> Option<FlushAbstraction> {
-    debug_assert!(hole_cards[0].to_int() < hole_cards[1].to_int());
+    debug_assert!(hole_cards[0].to_int() < hole_cards[1].to_int(), "Hole cards are not sorted: {} {}", hole_cards[0], hole_cards[1]);
     if board_cards.len() == 0 {
         return None;
     }
@@ -815,6 +833,25 @@ impl ConnectedCardsAbstraction {
             ConnectedCardsAbstraction::ThreeOfAKind(toak) => 3 << 4 | toak.toak_order_score,
             ConnectedCardsAbstraction::FullHouse(fh) => 4 << 4 | fh.high_card_is_house as u8,
             ConnectedCardsAbstraction::FourOfAKind => 5,
+        }
+    }
+
+    pub fn deserialise(serialised: &u8) -> ConnectedCardsAbstraction {
+        match serialised >> 4 {
+            1 => ConnectedCardsAbstraction::Pair(PairAbstraction {
+                pair_order_score: serialised & 0b1111,
+            }),
+            2 => ConnectedCardsAbstraction::TwoPair(TwoPairAbstraction {
+                two_pair_order_score: serialised & 0b1111,
+            }),
+            3 => ConnectedCardsAbstraction::ThreeOfAKind(ThreeOfAKindAbstraction {
+                toak_order_score: serialised & 0b1111,
+            }),
+            4 => ConnectedCardsAbstraction::FullHouse(FullHouseAbstraction {
+                high_card_is_house: (serialised & 0b1) == 1,
+            }),
+            5 => ConnectedCardsAbstraction::FourOfAKind,
+            _ => panic!("Invalid connected card abstraction serialisation {}", serialised),
         }
     }
 }
@@ -1131,6 +1168,7 @@ mod connected_cards_abstraction_tests {
     }
 }
 
+#[derive(Default)]
 pub struct HoleCardsAbstraction {
     pub lower_card: Rank,
     pub higher_card: Rank,

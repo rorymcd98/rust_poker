@@ -3,7 +3,7 @@ use lazy_static::lazy_static;
 use crate::config::*;
 use crate::evaluate::evaluate_hand::{HandEvaluator, HandEvaluatorLookup};
 use crate::traversal::action_history::game_abstraction::{GameAbstractionSerialised, convert_deal_into_abstraction};
-use crate::models::card::NineCardDeal;
+use crate::models::card::{cards_string, NineCardDeal};
 use crate::models::Player;
 use crate::models::Card;
 use std::cell::Cell;
@@ -11,7 +11,7 @@ use super::super::action_history::game_abstraction::GameAbstraction;
 use super::terminal_state::TerminalState;
 
 lazy_static! {
-    static ref EVALUATOR: HandEvaluatorLookup = HandEvaluatorLookup::new();
+    pub static ref EVALUATOR: HandEvaluatorLookup = HandEvaluatorLookup::new();
 }
 
 pub struct GameStateHelper {
@@ -48,7 +48,7 @@ impl GameStateHelper {
             small_blind_player,
             big_blind_player: small_blind_player.get_opposite(),
             bets_this_round: Cell::new(0),
-            winner: EVALUATOR.evaluate_deal(nine_card_deal),
+            winner: EVALUATOR.evaluate_deal(&nine_card_deal),
             checks_this_round: Cell::new(0),
         }
     }
@@ -116,12 +116,19 @@ impl GameStateHelper {
     }
 
     pub fn serialise_history_with_current_player(&self) -> GameAbstractionSerialised {
-        self.game_abstraction.get_abstraction(
+        println!("Serialising with current player: {:?}", self.current_player.get());
+        println!("Cards dealt: {}", self.cards_dealt.get());
+        
+        let res = self.game_abstraction.get_abstraction(
             (self.cards_dealt.get()).saturating_sub(2) as usize,
             self.get_current_player_pot(),
             self.bets_this_round.get(),
             self.current_player.get(),
-        )
+        );
+        if self.current_player.get() != self.small_blind_player && self.current_player.get().is_traverser() && self.bets_this_round.get() == 0 && self.get_current_player_pot() == 2 && self.checks_this_round.get() == 0 && self.cards_dealt.get() == 0 {
+        // println!("Preflop {:?} , cards {}", res, cards_string(&self.get_current_player_cards()));
+        }
+        res 
     }
 
     pub fn check_round_terminal(&self) -> TerminalState {
@@ -159,7 +166,6 @@ impl GameStateHelper {
 
     // If we're at showdown, we lose our pot, or gain the opponent's pot
     pub fn evaluate_showdown(&self) -> f32 {
-        // validate_history(&self.action_history.borrow().history);
         match self.winner {
             Some(Player::Traverser) => self.opponent_pot.get() as f32,
             Some(Player::Opponent) => -(self.traverser_pot.get() as f32),
@@ -208,8 +214,11 @@ impl GameStateHelper {
     }
 
     pub fn call_or_bet(&self) {
+        if self.get_current_player_pot() == SMALL_BLIND {
+            return self.call();
+        }
         match self.bets_this_round.get() {
-            0 => self.bet(), // Handles the preflop edge case, and the start of betting rounds
+            0 => self.bet(), // Handles the start of betting rounds
             _ => self.call(),
         }
     }
@@ -282,5 +291,20 @@ impl GameStateHelper {
         self.bets_this_round.set(previous_bets);
         self.current_player.set(previous_player);
         self.checks_this_round.set(previous_checks);
+    }
+
+    pub fn current_state_as_string(&self) -> String{
+        format!(
+            "Current state: Player Cards: {} Cards dealt: {} Current player: {}\nTraverser pot: {} Opponent pot: {} Bets this round: {} Checks this round: {}",
+            cards_string(&self.get_current_player_cards()),
+            {
+                cards_string(&self.cards[4..4+self.cards_dealt.get() as usize])
+            },
+            self.get_current_player(),
+            self.traverser_pot.get(),
+            self.opponent_pot.get(),
+            self.bets_this_round.get(),
+            self.checks_this_round.get()
+        )
     }
 }

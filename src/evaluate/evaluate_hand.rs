@@ -146,7 +146,7 @@ impl HandLookup for HandLookupArrays {
 /// 1 is a High Card 7
 pub trait HandEvaluator {
     fn evaluate(&self, cards: [Card; 5]) -> u16;
-    fn evaluate_deal(&self, deal: NineCardDeal) -> Option<Player>;
+    fn evaluate_deal(&self, deal: &[Card; 9]) -> Option<Player>;
 }
 
 pub struct HandEvaluatorLookup {
@@ -198,7 +198,7 @@ impl HandEvaluator for HandEvaluatorLookup {
             .remaining_evaluation(prime_product as usize)
     }
 
-    fn evaluate_deal(&self, deal: NineCardDeal) -> Option<Player> {
+    fn evaluate_deal(&self, deal: &[Card; 9]) -> Option<Player> {
         let best_score_traverser = self.score_for_indices(&deal, 0);
         let best_score_opponent = self.score_for_indices(&deal, 2);
 

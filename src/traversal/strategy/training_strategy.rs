@@ -33,8 +33,6 @@ pub struct TrainingStrategy {
     pub actions: usize,
     pub strategy_sum: [f32; DEFAULT_ACTION_COUNT],
     pub regrets_sum: [f32; DEFAULT_ACTION_COUNT],
-    pub current_strategy: [f32; DEFAULT_ACTION_COUNT],
-    pub updates: usize,
 }
 
 impl Strategy for TrainingStrategy {
@@ -43,8 +41,6 @@ impl Strategy for TrainingStrategy {
             actions,
             strategy_sum: [0f32; DEFAULT_ACTION_COUNT],
             regrets_sum: [0f32; DEFAULT_ACTION_COUNT],
-            current_strategy: [0f32; DEFAULT_ACTION_COUNT],
-            updates: 0,
         }
     }
 
@@ -59,10 +55,8 @@ impl Strategy for TrainingStrategy {
     fn from_existing_strategy(actions: usize, strategy: [f32; DEFAULT_ACTION_COUNT]) -> Self {
         TrainingStrategy {
             actions: actions,
-            strategy_sum: [0f32; DEFAULT_ACTION_COUNT],
+            strategy_sum: strategy, // TODO - I did this when removing the current strategy ... not sure if correct
             regrets_sum: [0f32; DEFAULT_ACTION_COUNT],
-            current_strategy: strategy,
-            updates: 0,
         }
     }
 
@@ -79,6 +73,7 @@ impl TrainingStrategy {
         action_utilities: &Vec<f32>,
         iteration: usize,
     ) {
+        // println!("updating strategy with utilities, {} . {:?}", strategy_utility, action_utilities);
         let iterf = iteration as f32;
 
         // Temper the existing regrets sum according to DCRF
@@ -96,14 +91,17 @@ impl TrainingStrategy {
             }
         }
 
-        self.update_strategy_sum_iter(iterf);
+        if iteration > MIN_SAMPLING_ITERATION_CUTOFF {
+            self.update_strategy_sum_iter(iterf);
+        }
     }
 
     // Updates the strategy sum based on the strategy calculated in the last iteration
     fn update_strategy_sum_iter(&mut self, iteration: f32) {
+        let current_strategy = self.get_current_strategy(iteration as usize);
         for index in 0..self.actions {
             // Add a DCRF weighted strategy to the strategy sum
-            let contribution = self.current_strategy[index] * ((iteration / (iteration + 1.0)).powf(GAMMA)); // Weighted according to the iteration using DCRF
+            let contribution = current_strategy[index] * ((iteration / (iteration + 1.0)).powf(GAMMA)); // Weighted according to the iteration using DCRF
             self.strategy_sum[index] += contribution;
         }
     }

@@ -1,5 +1,4 @@
-/// This is dead code, used to be used to track the history of actions in a game
-
+/// This is dead code, used to be used to track the history of actions in a game but now we just use GameAbstraction
 use core::panic;
 
 use itertools::Itertools;

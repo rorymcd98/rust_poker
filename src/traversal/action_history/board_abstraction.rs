@@ -2,6 +2,8 @@ use std::fmt::Display;
 
 use crate::models::card::Card;
 use crate::{evaluate::generate_tables::remaining_hand_types::HandType, models::card::Rank};
+
+#[derive(Default)]
 pub struct BoardAbstraction {
     pub max_consecutive_cards: u8,
     pub suit_count_abstraction: u8, // 0 effectively means rainbow, otherwise corresponds to the number of cards
@@ -74,6 +76,38 @@ impl BoardAbstraction {
             board_hand_type: hand_type,
         }
     }
+
+    pub fn serialise(&self) -> Vec<u8> {
+        let mut serialised = vec![];
+        serialised.push(self.max_consecutive_cards);
+        serialised.push(self.suit_count_abstraction);
+        let hand_type_serialised = match self.board_hand_type {
+            HandType::Pair(_) => 1,
+            HandType::TwoPair(_, _) => 2,
+            HandType::ThreeOfAKind(_) => 3,
+            HandType::FullHouse(_, _) => 4,
+            HandType::FourOfAKind(_) => 5,
+            HandType::None => 0,
+        };
+        serialised.push(hand_type_serialised);
+        serialised
+    }
+
+    pub fn deserialise(serialised: &[u8]) -> BoardAbstraction {
+        BoardAbstraction {
+            max_consecutive_cards: serialised[0],
+            suit_count_abstraction: serialised[1],
+            board_hand_type: match serialised[2] {
+                1 => HandType::Pair(Rank::default()),
+                2 => HandType::TwoPair(Rank::default(), Rank::default()),
+                3 => HandType::ThreeOfAKind(Rank::default()),
+                4 => HandType::FullHouse(Rank::default(), Rank::default()),
+                5 => HandType::FourOfAKind(Rank::default()),
+                _ => HandType::None,
+            },
+        }
+    }
+
 }
 #[cfg(test)]
 mod tests {
