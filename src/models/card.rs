@@ -383,12 +383,12 @@ impl Card {
             Rank::Ace => 12,
         };
 
-        (suit << 4) | rank
+        (rank << 2) | suit
     }
 
     pub fn deserialise(serialised_card: u8) -> Card {
-        let suit = Suit::from_int((serialised_card & 0b00110000) >> 4);
-        let rank = Rank::from_int(serialised_card & 0b00001111);
+        let rank = Rank::from_int((serialised_card & 0b00111100) >> 2);
+        let suit = Suit::from_int(serialised_card & 0b00000011);
         Card::new(suit, rank)
     }
 
@@ -629,5 +629,22 @@ mod tests {
             assert_eq!(combo.1.suit, Suit::Spades);
             assert!(combo.0.rank.to_int() < combo.1.rank.to_int());
         }
+    }
+
+    #[test]
+    fn card_order(){
+        assert!(Card::new(Suit::Spades, Rank::Two) < Card::new(Suit::Spades, Rank::Three));
+        assert!(Card::new(Suit::Spades, Rank::Two) < Card::new(Suit::Hearts, Rank::Two));
+        assert!(Card::new(Suit::Hearts, Rank::Two) < Card::new(Suit::Spades, Rank::Three));
+
+        let mut cards = vec![
+            Card::new(Suit::Spades, Rank::Two),
+            Card::new(Suit::Hearts, Rank::Two),
+            Card::new(Suit::Spades, Rank::Three),
+            Card::new(Suit::Hearts, Rank::Three),
+            Card::new(Suit::Spades, Rank::Ace),
+            Card::new(Suit::Hearts, Rank::Ace),
+        ];
+        assert!(cards.is_sorted());
     }
 }

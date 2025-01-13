@@ -49,7 +49,7 @@ impl BoardAbstraction {
             } else {
                 consective = 0;
             }
-        // TODO fix tomorrow
+        }
 
         let hand_type = match connected_cards {
             [1, 0, 0] => HandType::Pair(Rank::default()),
@@ -66,7 +66,7 @@ impl BoardAbstraction {
         let suit_count_abstraction = match (max_suits, cards.len()) {
             (1, 3) => 0,
             (1, 4) => 0,
-            (2, 5) => 0,
+            (2, 5) => 0, // TODO - review if we want to round down to 0, could be informative that there are 2 suits on the river (e.g. missed flush?)
             _ => max_suits,
         };
 
@@ -197,7 +197,7 @@ mod tests {
         ];
         let board_abstraction = BoardAbstraction::new(&cards);
         assert_eq!(board_abstraction.max_consecutive_cards, 1);
-        assert_eq!(board_abstraction.suit_count_abstraction, 1);
+        assert_eq!(board_abstraction.suit_count_abstraction, 0);
         assert!(matches!(
             board_abstraction.board_hand_type,
             HandType::FourOfAKind(_)

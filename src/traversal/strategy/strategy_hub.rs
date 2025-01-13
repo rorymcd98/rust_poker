@@ -89,15 +89,15 @@ impl<TStrategy: Strategy + Debug> StrategyHub<TStrategy> {
             let sb_2 = cards[i+3];
             
             let bb_key = StrategyHubKey {
-                low_rank: bb_1.rank,
-                high_rank: bb_2.rank,
+                low_rank: bb_1.rank.min(bb_2.rank),
+                high_rank: bb_1.rank.max(bb_2.rank),
                 is_suited: bb_1.suit == bb_2.suit,
                 is_sb: false,
             };
 
             let sb_key = StrategyHubKey {
-                low_rank: sb_1.rank,
-                high_rank: sb_2.rank,
+                low_rank: sb_1.rank.min(sb_2.rank),
+                high_rank: sb_1.rank.max(sb_2.rank),
                 is_suited: sb_1.suit == sb_2.suit,
                 is_sb: true,
             };

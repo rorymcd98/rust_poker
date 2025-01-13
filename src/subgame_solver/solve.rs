@@ -185,15 +185,14 @@ struct CbvSolver<'a> {
 
 impl<'a> CbvSolver<'a> {
     pub fn calculate_cbv(&mut self, action_history: &Vec<Action>) -> f32 { // TODO - move Vec<Action> to the struct
-        // println!("Player {}, sb: {}", self.game_state.current_player.get(), self.game_state.small_blind_player);
         let initial_reaches = self.calculate_initial_reaches(action_history);
         // println!("Initial reaches: {:?}", initial_reaches);
-        println!("Trav seen: {}, Trav not seen: {}", self.trav_seen.get(), self.trav_not_seen.get());
-        println!("Opp seen: {}, Opp not seen: {}", self.opp_seen.get(), self.opp_not_seen.get());
-        return 0.0;
+        // return 0.0;
         let traverser_utility = self.traverse_action(&initial_reaches); // need to weight by reaches
         let res = traverser_utility.iter().sum::<f32>() / initial_reaches.iter().sum::<f32>();
         println!("Utility: {}", res);
+        println!("Trav seen: {}, Trav not seen: {}", self.trav_seen.get(), self.trav_not_seen.get());
+        println!("Opp seen: {}, Opp not seen: {}", self.opp_seen.get(), self.opp_not_seen.get());
         res
     }
 
