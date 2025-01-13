@@ -1,18 +1,23 @@
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::vec;
 
 use dashmap::DashMap;
+use itertools::Itertools;
+use rand::distributions::weighted;
 use rust_poker::config::{BIG_BLIND, BLUEPRINT_FOLDER};
 
 use crate::evaluate::evaluate_hand::HandEvaluator;
 use crate::models::card::{all_pocket_pairs, all_rank_combos, NineCardDeal, Rank};
 use crate::models::{Card, Player, Suit};
-use crate::traversal::action_history::action::Action;
-use crate::traversal::action_history::game_abstraction::{convert_deal_into_abstraction, to_string_game_abstraction, GameAbstraction};
+use crate::traversal::action_history::action::{self, Action, DEFAULT_ACTION_COUNT};
+use crate::traversal::action_history::action_history::ActionHistory;
+use crate::traversal::action_history::game_abstraction::{self, convert_deal_into_abstraction, to_string_game_abstraction, GameAbstraction, GameAbstractionSerialised};
 use crate::traversal::game_state::game_state_helper::{GameStateHelper, EVALUATOR};
 use crate::traversal::game_state::terminal_state::TerminalState;
 use crate::traversal::main_train::{get_all_combos_by_blind, get_unique_cards};
+use crate::traversal::strategy;
 use crate::traversal::strategy::play_strategy::PlayStrategy;
 use crate::traversal::strategy::strategy_branch::{StrategyBranch, StrategyHubKey};
 use crate::traversal::strategy::strategy_hub::{deserialise_strategy_hub, StrategyHub};
@@ -45,267 +50,470 @@ struct GameStateFromActions {
 // 2. Calculate the gift by finding the max of CBV(I) - CBV(I, a) for all a in A(I)
 
 pub fn solve_cbr_utilties() {
-    let mut strategy_hub = StrategyHub::from_map(deserialise_strategy_hub::<PlayStrategy>(BLUEPRINT_FOLDER).unwrap()).unwrap();
-    let player_hand = 
-    [Card::new(Suit::Spades, Rank::King), Card::new(Suit::Clubs, Rank::King)];
+    let strategy_hub = deserialise_strategy_hub::<PlayStrategy>(BLUEPRINT_FOLDER).unwrap();
+    let opponent_strategy_map = strategy_hub.into_iter().collect::<DashMap<StrategyHubKey, StrategyBranch<_>>>();
+
+    let player_hand = [Card::new(Suit::Spades, Rank::King), Card::new(Suit::Clubs, Rank::King)];
 
 
-    let sb_key = StrategyHubKey {
+    let traverser_key = StrategyHubKey {
         low_rank: player_hand[0].rank,
         high_rank: player_hand[1].rank,
         is_suited: player_hand[0].suit == player_hand[1].suit,
         is_sb: true,
     };
 
-    let mut sb_strategy_branch = strategy_hub.sb_in_store.remove(&sb_key).unwrap().1; // TODO - provide a method for this? 
+    let traverser_strategy_branch = opponent_strategy_map.remove(&traverser_key).unwrap().1;
 
-    const PLAY_ITERATIONS: usize = 10000;
-    let opponent_bb_elements = get_all_combos_by_blind(false);
-    
     // Look for the gifts give on the Bet node
     let action_history = &vec![
-        Action::Bet,  
-        // Action::Deal(Card::new(Suit::Clubs, Rank::Two)), Action::Deal(Card::new(Suit::Spades, Rank::Three)), Action::Deal(Card::new(Suit::Clubs, Rank::Four)),
-        // Action::CheckFold, Action::Bet, Action::Call, 
-        // Action::Deal(Card::new(Suit::Clubs, Rank::Five)),
-        // Action::CheckFold, Action::Bet, Action::Call, 
-        // Action::Deal(Card::new(Suit::Clubs, Rank::Six)),
-        // Action::CheckFold, Action::Bet, Action::Bet,
+        Action::Bet,  Action::Bet, Action::Bet, Action::Call,
+        Action::Deal(Card::new(Suit::Clubs, Rank::Two)), Action::Deal(Card::new(Suit::Spades, Rank::Three)), Action::Deal(Card::new(Suit::Clubs, Rank::Four)),
+        Action::CheckFold, //Action::Bet, Action::Call, 
+        //Action::Deal(Card::new(Suit::Diamonds, Rank::Five)),
+        //Action::CheckFold,// Action::Bet, Action::Call, 
+        //Action::Deal(Card::new(Suit::Clubs, Rank::Six)),
+        //Action::Bet, //Action::Bet, Action::Bet//, Action::Bet, Action::Call
     ];
-    let nodes_of_interest = create_action_histories_which_can_gift_us(&action_history, false);
-    
-    let gift_map: Arc<DashMap<Vec<Action>, CalculateBestValueNode>> = Arc::new(DashMap::new());
-    let cbv_map = Arc::<DashMap<StrategyHubKey, f32>>::new(DashMap::new());
-    // for node in nodes_of_interest {
-    //     gift_map.insert(node, CalculateBestValueNode { weighted_value_sum: 0.0, total_reach: 0.0 });
-    // }
 
-    // Create a map for the subgame
-    
-    let margin_map: Arc<DashMap<Vec<Action>, f32>> = Arc::new(DashMap::new());
+    let sb_player = Player::Traverser;
+    let game_state = &mut convert_actions_to_game_state(&action_history, sb_player);
 
-    // let mut bb_strategy_branch = strategy_hub.bb_in_store.remove(&opponent_bb_elements[0]).unwrap().1;
-    // bb_strategy_branch.print_stats();
-    // bb_strategy_branch.map.iter().for_each(|(key, value)| {
-    //     if key.starts_with(&[0,2,1]) {
-    //         println!("Key: {:?}, Value: {:?}", key, value.get_current_strategy(1));
-    //     } 
-    // });
-    // return; 
-
-    for bb_key in opponent_bb_elements {
-        let mut bb_strategy_branch = strategy_hub.bb_in_store.remove(&bb_key).unwrap().1;
-        
-        let mut total_utility = 0.0;
-
-        let sb_player = Player::Traverser;
-        let game_state = &mut convert_actions_to_game_state(&action_history, Player::Opponent);
-        let cards_dealt = game_state.cards_dealt.get();
-        println!("Existing cards: {:?}", cards_dealt);
-        let current_board_cards = game_state.cards[4..(4 + cards_dealt as usize)].to_vec();
-        
-        let cards = get_unique_cards(&sb_key, &bb_key); // TODO - Extend this so it actually avoids unique cards
-        let mut existing_cards = vec![cards[0], cards[1], cards[2], cards[3]];
-        // EVALUATOR
-        existing_cards.extend(current_board_cards.iter());
-        let new_cards = Card::get_n_more_cards(&existing_cards, 5 - cards_dealt as usize);
-        existing_cards.extend(new_cards);
-        let deal = &existing_cards.try_into().expect("Expected a slice of length 9");
-        let game_abstraction = convert_deal_into_abstraction(*deal, sb_player);
-        game_state.game_abstraction = game_abstraction;
-        
-        println!("Current player {}, small blind player {}", game_state.current_player.get(), game_state.small_blind_player);
-        if (game_state.current_player.get() != Player::Traverser) {
-            panic!("Expected the traverser to be the current player");
-        }
-        if (game_state.current_player.get() == game_state.small_blind_player) {
-            panic!("Expected the bblind to be the current player");
-        }
-
-        let abstraction = game_state.serialise_history_with_current_player();
-        println!("Abstraction: {:?}", abstraction);
-        let hol1 = bb_strategy_branch.strategy_hub_key.low_rank;
-        let hole2 = bb_strategy_branch.strategy_hub_key.high_rank;
-        let suited = bb_strategy_branch.strategy_hub_key.is_suited;
-        let is_sb = bb_strategy_branch.strategy_hub_key.is_sb;
-        println!("Abstraction: {:?}", to_string_game_abstraction(hol1, hole2, suited, is_sb, &abstraction));
-
-        let strategy = bb_strategy_branch.get_strategy(&abstraction);
-        if strategy.is_none() {
-            panic!("Expected a strategy");
+    let mut existing_cards = action_history.iter().filter_map(|action| {
+        if let Action::Deal(card) = action {
+            Some(card.to_int())
         } else {
-            println!("Foudn STARETGHASD")
+            None
         }
+    }).collect_vec();
 
+    existing_cards.push(player_hand[0].to_int());
+    existing_cards.push(player_hand[1].to_int());
 
+    let mut remaining_cards = (0..52).collect::<HashSet<_>>();
+    for card in existing_cards.iter() {
+        remaining_cards.remove(card);
+    }
 
+    let cards_dealt = game_state.cards_dealt.get();
+    let potential_card_histories = remaining_cards.iter().permutations(2 + (5 - cards_dealt) as usize).collect::<Vec<_>>();
+    let potential_card_histories: HashSet<Vec<Card>> = potential_card_histories.iter().map(|card_ints| card_ints.iter().map(|card_int| Card::from_int(**card_int)).collect()).map(|card_history: Vec<Card>| {
+        let mut cards = vec![card_history[0], card_history[1]];
+        cards.sort(); // Sort the first two cards
+        if cards_dealt == 0 {
+            let mut sorted_flop = [card_history[2], card_history[3], card_history[4]];
+            sorted_flop.sort();
+            cards.extend(sorted_flop);
+        }
+        for card in card_history.iter().skip(cards.len()) {
+            cards.push(*card);
+        }
+        cards
+    }).collect();
+
+    let mut deal = [Card::default(); 9];
+    let mut card_index = 0;
+    for action in action_history {
+        if let Action::Deal(card) = action {
+            deal[4 + card_index] = *card;
+            card_index += 1;
+        }
+    }
+
+    deal[0] = player_hand[0];
+    deal[1] = player_hand[1];
+
+    let mut all_game_abstractions = Vec::with_capacity(potential_card_histories.len());
+    let mut all_evaluations = Vec::with_capacity(potential_card_histories.len());
+    let mut strategy_hub_keys = Vec::with_capacity(potential_card_histories.len());
+
+    for cards in potential_card_histories {
+        deal[2] = cards[0];
+        deal[3] = cards[1];
+        for (i, &card) in cards.iter().enumerate().skip(2) {
+            deal[i + 2 + cards_dealt as usize] = card;
+        }
         
-        // for _ in 0..PLAY_ITERATIONS {
-        //     let cards = get_unique_cards(&sb_key, &bb_key); // TODO - Extend this so it actually avoids unique cards
-        //     let mut existing_cards = vec![cards[0], cards[1], cards[2], cards[3]];
-        //     // EVALUATOR
-        //     existing_cards.extend(current_board_cards.iter());
-        //     let new_cards = Card::get_n_more_cards(&existing_cards, 5 - cards_dealt as usize);
-        //     existing_cards.extend(new_cards);
-
-        //     game_state.winner = EVALUATOR.evaluate_deal(&existing_cards.try_into().expect("Expected a slice of length 9"));
-
-        //     let mut branch_traverser = SolvingBranchTraverser::new(
-        //         &mut sb_strategy_branch,
-        //         &mut bb_strategy_branch,
-        //         game_state,
-        //         Arc::clone(&gift_map),
-        //     );
-        //     let utility = branch_traverser.begin_traversal();
-        //     total_utility += utility;
-        // }
-
-        // println!("Average utility for {} vs {}: {}", sb_key, bb_key,  total_utility / (PLAY_ITERATIONS as f32));
-        // bb_strategy_branch.print_stats();
-        // strategy_hub.bb_in_store.insert(bb_key, bb_strategy_branch);
+        let game_abstraction = convert_deal_into_abstraction(deal);
+        all_game_abstractions.push(game_abstraction);
+        all_evaluations.push(EVALUATOR.evaluate_deal(&deal));
+        let key = StrategyHubKey {
+            low_rank: deal[2].rank,
+            high_rank: deal[3].rank,
+            is_suited: deal[2].suit == deal[3].suit,
+            is_sb: sb_player == Player::Opponent,
+        };
+        strategy_hub_keys.push(key);
     }
 
-    sb_strategy_branch.print_stats();
+    // println!("{}", game_state.to_string());
+    //  return;
 
+    let mut cbv_solver = CbvSolver{
+        traverser_strategy: traverser_strategy_branch,
+        opponent_strategy_map,
+        game_state,
+        evaluations: all_evaluations,
+        game_abstractions: all_game_abstractions,
+        strategy_hub_keys,
+
+        trav_seen: Cell::new(0),
+        opp_seen: Cell::new(0),
+        trav_not_seen: Cell::new(0),
+        opp_not_seen: Cell::new(0),
+    };
+
+    let utility = cbv_solver.calculate_cbv(&action_history);
+    println!("Utility: {}", utility);
 }
 
-struct SolvingBranchTraverser<'a> {
+type CbvReturn = Vec<f32>; // Utilitiy for each deal
+
+struct CbvSolver<'a> {
+    traverser_strategy: StrategyBranch<PlayStrategy>,
+    opponent_strategy_map: DashMap<StrategyHubKey, StrategyBranch<PlayStrategy>>,
     game_state: &'a mut GameStateHelper,
-    sb_strategy_branch: &'a mut StrategyBranch<PlayStrategy>,
-    bb_strategy_branch: &'a mut StrategyBranch<PlayStrategy>,
-    current_reach: Cell<f32>,
-    cbr_map: Arc<DashMap<Vec<Action>, CalculateBestValueNode>>,
-    action_histories: RefCell<Vec<Action>>,
+    evaluations: Vec<Option<Player>>,
+    game_abstractions: Vec<GameAbstraction>,
+    strategy_hub_keys: Vec<StrategyHubKey>,
+
+    trav_seen: Cell<u32>,
+    opp_seen: Cell<u32>,
+    trav_not_seen: Cell<u32>,
+    opp_not_seen: Cell<u32>,
 }
 
-impl<'a> SolvingBranchTraverser<'a> {
-    pub fn new(
-        sb_strategy_branch: &'a mut StrategyBranch<PlayStrategy>,
-        bb_strategy_branch: &'a mut StrategyBranch<PlayStrategy>,
-        game_state: &'a mut GameStateHelper,
-        cbr_map: Arc<DashMap<Vec<Action>, CalculateBestValueNode>>,
-    ) -> SolvingBranchTraverser<'a> {
-        SolvingBranchTraverser {
-            sb_strategy_branch,
-            bb_strategy_branch,
-            game_state,
-            current_reach: Cell::new(1.0), // TODO - Consider a better type for this
-            cbr_map,
-            action_histories: RefCell::new(vec![]),
+impl<'a> CbvSolver<'a> {
+    pub fn calculate_cbv(&mut self, action_history: &Vec<Action>) -> f32 { // TODO - move Vec<Action> to the struct
+        // println!("Player {}, sb: {}", self.game_state.current_player.get(), self.game_state.small_blind_player);
+        let initial_reaches = self.calculate_initial_reaches(action_history);
+        // println!("Initial reaches: {:?}", initial_reaches);
+        println!("Trav seen: {}, Trav not seen: {}", self.trav_seen.get(), self.trav_not_seen.get());
+        println!("Opp seen: {}, Opp not seen: {}", self.opp_seen.get(), self.opp_not_seen.get());
+        return 0.0;
+        let traverser_utility = self.traverse_action(&initial_reaches); // need to weight by reaches
+        let res = traverser_utility.iter().sum::<f32>() / initial_reaches.iter().sum::<f32>();
+        println!("Utility: {}", res);
+        res
+    }
+
+    fn calculate_initial_reaches(&self, action_history: &Vec<Action>) -> Vec<f32> {
+        let mut reaches = vec![1.0; self.game_abstractions.len()];
+        let game_state = GameStateHelper::new(self.game_state.cards, self.game_state.small_blind_player);
+        game_state.cards_dealt.set(0);
+
+        for action in action_history {
+            let round = (game_state.cards_dealt.get()).saturating_sub(2) as usize;
+            let current_player_pot = game_state.get_current_player_pot();
+            let bets_this_round = game_state.bets_this_round.get();
+            let num_available_actions = game_state.get_num_available_actions();
+
+            println!("player {}, action {}, round {}, current_player_pot {}, bets_this_round {}, num_available_actions {}", game_state.get_current_player(), action,  round, current_player_pot, bets_this_round, num_available_actions);
+
+            match action {
+                Action::Deal(_) => {
+                    game_state.deal();
+                },
+                Action::Bet => {
+                    match game_state.current_player.get() {
+                        Player::Traverser => {
+                            // The traverser strategy is the same up until we begin branching - hence deal_index 0 (we could use any deal index here)
+                            let strategy = self.get_traverser_strategy(0, round, current_player_pot, bets_this_round, num_available_actions);
+                            for deal_index in 0..self.game_abstractions.len() {
+                                let action_probability = strategy[2.max(num_available_actions-1)];
+                                reaches[deal_index] *= action_probability;
+                            }
+                        },
+                        Player::Opponent => {
+                            for deal_index in 0..self.game_abstractions.len() {
+                                let strategy = self.get_opponent_strategy(deal_index, round, current_player_pot, bets_this_round, num_available_actions);
+                                let action_probability = strategy[2.max(num_available_actions-1)];
+                                reaches[deal_index] *= action_probability;
+                            }
+                        }
+                    }
+                    game_state.bet();
+                    game_state.switch_current_player();
+                },
+                Action::Call => {
+                    match game_state.current_player.get() {
+                        Player::Traverser => {
+                            // ditto
+                            let strategy = self.get_traverser_strategy(0, round, current_player_pot, bets_this_round, num_available_actions);
+                            for deal_index in 0..self.game_abstractions.len() {
+                                let action_probability = strategy[1];
+                                reaches[deal_index] *= action_probability;
+                            }
+                        },
+                        Player::Opponent => {
+                            for deal_index in 0..self.game_abstractions.len() {
+                                let strategy = self.get_opponent_strategy(deal_index, round, current_player_pot, bets_this_round, num_available_actions);
+                                //println!("Strategy: {:?}", strategy);
+                                let action_probability = strategy[1];
+                                reaches[deal_index] *= action_probability;
+                            }
+                        }
+                    }
+                    game_state.call();
+                    game_state.switch_current_player();
+                },
+                Action::CheckFold => {
+                    match game_state.current_player.get() {
+                        Player::Traverser => {
+                            // ditto
+                            let strategy = self.get_traverser_strategy(0, round, current_player_pot, bets_this_round, num_available_actions);
+                            for deal_index in 0..self.game_abstractions.len() {
+                                let action_probability = strategy[0];
+                                reaches[deal_index] *= action_probability;
+                            }
+                        },
+                        Player::Opponent => {
+                            for deal_index in 0..self.game_abstractions.len() {
+                                let strategy = self.get_opponent_strategy(deal_index, round, current_player_pot, bets_this_round, num_available_actions);
+                                //println!("Strategy: {:?}", strategy);
+                                let action_probability = strategy[0];
+                                reaches[deal_index] *= action_probability;
+                            }
+                        }
+                    }
+                    game_state.checkfold();
+                    game_state.switch_current_player();
+                },
+                _ => {}
+            }
+        }
+        reaches
+    }
+
+    pub fn evaluate_showdown(&self, deal_index: usize, traverser_pot: f32, opponent_pot: f32) -> f32 {
+        let winner = self.evaluations[deal_index];
+        match winner {
+            Some(Player::Traverser) => opponent_pot,
+            Some(Player::Opponent) => -traverser_pot,
+            None => 0.0,
+        }
+    }
+    
+    pub fn evaluate_fold(&self, current_player: &Player, traverser_pot: f32, opponent_pot: f32) -> f32 {
+        match current_player {
+            Player::Traverser => opponent_pot,
+            Player::Opponent => -traverser_pot,
         }
     }
 
-    pub fn begin_traversal(&mut self) -> f32 {
-        self.traverse_action()
-    }
-
-    fn traverse_action(&mut self) -> f32 {
-        match self.game_state.check_round_terminal() {
-            TerminalState::Showdown => return self.game_state.evaluate_showdown(),
-            TerminalState::Fold => return self.game_state.evaluate_fold(),
-            TerminalState::RoundOver => {
-                if self.game_state.is_preflop() {
-                    return self.traverse_flop();
-                }
-                return self.traverse_deal();
-            }
-            TerminalState::None => (),
-        };
-
+    // If Traverser, next reaches in the action probs
+    // If Opponent, next reaches is dependent on the strategy for each hc
+    fn traverse_action(&mut self, reaches: &Vec<f32>) -> CbvReturn {
         let num_available_actions = self.game_state.get_num_available_actions();
 
-        let pot_before_action = self.game_state.get_current_player_pot();
-        let bets_before_action = self.game_state.bets_this_round.get();
-        let previous_player = self.game_state.current_player.get();
-        let checks_before = self.game_state.checks_this_round.get();
+        // Cache these
+        let traverser_pot = self.game_state.traverser_pot.get() as f32;
+        let opponent_pot = self.game_state.opponent_pot.get() as f32;
+        let current_player = self.game_state.current_player.get();
 
-        let strategy = self.get_strategy();
-        let current_strategy = strategy.get_current_strategy(0);
-        let reach_now = self.current_reach.get();
-
-        let mut max_cbv: f32 = 0.0;
-        let mut action_cbvs = vec![0.0; num_available_actions];
-        for action in 0..num_available_actions {
-            if current_strategy[action] < 0.01 {
-                continue;
+        let mut cbv_return = Vec::with_capacity(self.game_abstractions.len());
+        
+        match self.game_state.check_round_terminal() {
+            TerminalState::Showdown => {
+                for deal_index in 0..self.game_abstractions.len() {
+                    let showdown_utility = self.evaluate_showdown(deal_index, traverser_pot, opponent_pot);
+                    cbv_return.push(showdown_utility * reaches[deal_index]);
+                };
+                return cbv_return;
+            },
+            TerminalState::Fold => {
+                // Don't need to iterate over the game abstractions here because:
+                // (n*A + n*B + n*C) / (A + B + C) = n
+                // Where n is the (constant for this node) fold utility for this infoset and A, B, C are the reaches
+                cbv_return = vec![self.evaluate_fold(&current_player, traverser_pot, opponent_pot); self.game_abstractions.len()];
+                return cbv_return;
             }
-            // TODO - move this into the traverse_chosen_action method
-            self.current_reach.set(reach_now * current_strategy[action]);
-            action_cbvs[action] = reach_now * self.traverse_chosen_action(action, previous_player, pot_before_action, bets_before_action, checks_before);
-            max_cbv = max_cbv.max(action_cbvs[action]);
-        }
-        self.current_reach.set(reach_now);
-        max_cbv
+            TerminalState::RoundOver => {
+                if self.game_state.is_preflop() {
+                    return self.traverse_flop(reaches)
+                } else {
+                    return self.traverse_deal(reaches)
+                };
+            }
+            TerminalState::None => {
+                let round = (self.game_state.cards_dealt.get()).saturating_sub(2) as usize;
+                let bets_this_round = self.game_state.bets_this_round.get();
+                
+                let pot_before_action = self.game_state.get_current_player_pot();
+                let bets_before_action = self.game_state.bets_this_round.get();
+                let previous_player = self.game_state.current_player.get();
+                let checks_before = self.game_state.checks_this_round.get();
+
+                //// Here we're calculating CBV as described in Safe and Nested Subgame Solving for Imperfect-Information Games
+                return self.action_value(reaches, num_available_actions, current_player, round, bets_this_round, pot_before_action, bets_before_action, previous_player, checks_before)
+            },
+        };
     }
 
-    fn traverse_chosen_action(&mut self, action: usize, acting_player: Player, current_pot: u8, current_bets: u8, current_checks: u8) -> f32 {
-        match action {
-            0 => {
-                self.game_state.checkfold();
-                self.action_histories.borrow_mut().push(Action::CheckFold);
-            },
-            1 => {
-                self.game_state.call_or_bet();
-                self.action_histories.borrow_mut().push(Action::Call);
-            },
-            2 => {
-                self.game_state.bet();
-                self.action_histories.borrow_mut().push(Action::Bet);
-            },
-            _ => panic!("Invalid action"),
+    fn action_value(&mut self, reaches: &Vec<f32>, num_available_actions: usize, current_player: Player, round: usize, bets_this_round: u8, pot_before_action: u8, bets_before_action: u8, previous_player: Player, checks_before: u8) -> CbvReturn {
+        let mut reaches_for_actions = vec![vec![0.0; self.game_abstractions.len()]; num_available_actions];
+        let mut action_probabilities = vec![[0f32; DEFAULT_ACTION_COUNT]; self.game_abstractions.len()];
+        
+        // TODO - Not sure if its right to calculate the reaches the same for opponent and traverser here
+        for deal_index in 0..self.game_abstractions.len() {
+            let strategy = match current_player {
+                Player::Traverser => self.get_traverser_strategy(deal_index, round, pot_before_action, bets_this_round, num_available_actions),
+                Player::Opponent => self.get_opponent_strategy(deal_index, round, pot_before_action, bets_this_round, num_available_actions),
+            };
+            for action in 0..num_available_actions {
+                // store the reaches for each action
+                reaches_for_actions[action][deal_index] = reaches[deal_index] * strategy[action];
+            }
+            action_probabilities[deal_index] = strategy;
+        }
+        
+        let mut action_abstraction_utilities = vec![Vec::with_capacity(self.game_abstractions.len()); num_available_actions]; // TODO - Should use option
+        for action in 0..num_available_actions {
+            // TODO - We could prune here if next_reaches sum is close to 0
+            let next_reaches = &reaches_for_actions[action];
+            action_abstraction_utilities[action] = self.traverse_chosen_action(next_reaches, action, previous_player, pot_before_action, bets_before_action, checks_before);
+        }
+
+        if self.game_state.current_player.get() == Player::Traverser {
+            let mut max_utility = f32::NEG_INFINITY;
+            let mut best_action_utilities = vec![0.0; self.game_abstractions.len()];
+            let mut best_action_count = 0;
+
+            for action in 0..num_available_actions {
+                let mut reach_utility = 0.0;
+                let mut total_reach = 0.0;
+                let abstraction_utilities = &action_abstraction_utilities[action];
+                for deal_index in 0..self.game_abstractions.len() {
+                    let utility = abstraction_utilities[deal_index];
+                    let reach = reaches[deal_index];
+                    reach_utility += reach * utility;
+                    total_reach += reach;
+                }
+                let action_utility = reach_utility / total_reach;
+                if action_utility > max_utility {
+                    max_utility = action_utility;
+                    best_action_utilities = abstraction_utilities.clone();
+                    best_action_count = 1;
+                } else if action_utility == max_utility {
+                    for deal_index in 0..self.game_abstractions.len() {
+                        best_action_utilities[deal_index] += abstraction_utilities[deal_index];
+                    }
+                    best_action_count += 1;
+                }
+            }
+
+            if best_action_count > 1 {
+                for deal_index in 0..self.game_abstractions.len() {
+                    best_action_utilities[deal_index] /= best_action_count as f32;
+                }
+            }
+            return best_action_utilities;
+        } else {
+            let mut action_utilities = vec![0.0; self.game_abstractions.len()];
+            for action in 0..num_available_actions {
+                let abstraction_utilities = &action_abstraction_utilities[action];
+                for deal_index in 0..self.game_abstractions.len() {
+                    action_utilities[deal_index] += abstraction_utilities[deal_index] * action_probabilities[deal_index][action];
+                }
+            }
+            return action_utilities;
         };
+    }
+
+    fn traverse_chosen_action(&mut self, reaches: &Vec<f32>, action: usize, acting_player: Player, current_pot: u8, current_bets: u8, current_checks: u8) -> CbvReturn {
         self.game_state.switch_current_player();
-        let utility = self.traverse_action();
+        match action {
+            0 => self.game_state.checkfold(),
+            1 => self.game_state.call_or_bet(),
+            2 => self.game_state.bet(),
+            _ => {}
+        };
+        let utility = self.traverse_action(reaches);
         self.game_state.undo(
             acting_player,
             current_pot,
             current_bets,
             current_checks,
         );
-        self.action_histories.borrow_mut().pop();
         utility
     }
 
-    fn traverse_flop(&mut self) -> f32 {
+    fn traverse_flop(&mut self, reaches: &Vec<f32>) -> CbvReturn {
         let previous_player = self.game_state.current_player.get();
         let previous_bets = self.game_state.bets_this_round.get();
         let check_before = self.game_state.checks_this_round.get();
-        let flop_cards = self.game_state.cards[4..7].to_vec();
-        for card in flop_cards {
-            self.action_histories.borrow_mut().push(Action::Deal(card));
-        }
+
         self.game_state.deal_flop();
-        let utility = self.traverse_action();
-        for _ in 0..3 {
-            self.action_histories.borrow_mut().pop();
-        }
+        let utility = self.traverse_action(reaches);
         self.game_state
             .undeal_flop(previous_bets, previous_player, check_before);
         utility
     }
 
-    fn traverse_deal(&mut self) -> f32 {
+    fn traverse_deal(&mut self, reaches: &Vec<f32>) -> CbvReturn {
         let previous_player = self.game_state.current_player.get();
         let previous_bets = self.game_state.bets_this_round.get();
         let checks_before = self.game_state.checks_this_round.get();
-        let cards_dealt = self.game_state.cards_dealt.get();
-        let card = self.game_state.cards[4 + cards_dealt as usize];
-        self.action_histories.borrow_mut().push(Action::Deal(card));
+
         self.game_state.deal();
-        let utility = self.traverse_action();
-        self.action_histories.borrow_mut().pop();
+        let utility = self.traverse_action(reaches);
+
         self.game_state
             .undeal(previous_bets, previous_player, checks_before);
         utility
     }
 
-    fn get_strategy(&mut self) -> PlayStrategy {
-        let strategy_branch = if self.game_state.current_player.get() == self.game_state.small_blind_player {
-            &mut self.sb_strategy_branch
+    fn get_opponent_strategy(&self, deal_index: usize, round: usize, current_player_pot: u8, bets_this_round: u8, num_available_actions: usize) -> [f32; DEFAULT_ACTION_COUNT] {
+        let game_abstraction = &self.game_abstractions[deal_index];
+        // TODO - massively inefficient to regenerate this every time
+        let serialised_abstraction = game_abstraction.get_abstraction(
+            round,
+            current_player_pot,
+            bets_this_round,
+            &Player::Opponent, 
+        );
+
+        let strategy_hub_key = &self.strategy_hub_keys[deal_index];
+        
+        let strategy= self.opponent_strategy_map
+        .get(&strategy_hub_key)
+        .and_then(|strategy_branch| strategy_branch.get_strategy(&serialised_abstraction).cloned());
+    
+    
+        if strategy.is_none() {
+            println!("Strategy hub key: {:?}, round {}, bets {}, pot {}", strategy_hub_key, round, bets_this_round, current_player_pot);
+            self.opp_not_seen.set(self.opp_not_seen.get() + 1);
         } else {
-            &mut self.bb_strategy_branch
-        };
-        strategy_branch.get_strategy_or_default(&self.game_state.serialise_history_with_current_player(), self.game_state.get_num_available_actions())
+            self.opp_seen.set(self.opp_seen.get() + 1);
+        }
+
+        match strategy {
+            Some(strategy) => strategy.get_current_strategy(0),
+            None => [1.0 / (num_available_actions as f32); DEFAULT_ACTION_COUNT],
+        }
+    }
+
+    fn get_traverser_strategy(&self, deal_index: usize, round: usize, current_player_pot: u8, bets_this_round: u8, num_available_actions: usize) -> [f32; DEFAULT_ACTION_COUNT] {
+        let game_abstraction = &self.game_abstractions[deal_index];
+        let serialised_abstraction = game_abstraction.get_abstraction(
+            round,
+            current_player_pot,
+            bets_this_round,
+            &Player::Traverser, 
+        );
+
+        let strategy = self.traverser_strategy
+                .get_strategy(&serialised_abstraction);
+
+        if strategy.is_none() {
+            self.trav_not_seen.set(self.trav_not_seen.get() + 1);
+        } else {
+            self.trav_seen.set(self.trav_seen.get() + 1);
+        }
+        match strategy {
+            Some(strategy) => strategy.get_current_strategy(0),
+            None => [1.0 / (num_available_actions as f32); DEFAULT_ACTION_COUNT],
+        }
     }
 }
 

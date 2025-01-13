@@ -289,7 +289,7 @@ mod tests {
         let hands: Vec<NineCardDeal> = (0..100).map(|_| Card::new_random_9_card_game()).collect();
         let start = std::time::Instant::now();
         for i in 0..EVALS {
-            let _ = EVALUATOR.evaluate_deal(hands[i % 100]);
+            let _ = EVALUATOR.evaluate_deal(&hands[i % 100]);
         }
         let duration = start.elapsed();
         println!("9 card performance test took {:?}", duration);
@@ -315,7 +315,7 @@ mod tests {
     fn order_invariance_nine_card_game() {
         for _ in 0..EVALS {
             let game = Card::new_random_9_card_game();
-            let first_eval = EVALUATOR.evaluate_deal(game);
+            let first_eval = EVALUATOR.evaluate_deal(&game);
             let mut rng = rand::thread_rng();
             for perm in game[4..9].iter().permutations(5) {
                 let mut game_perm = [
@@ -324,8 +324,30 @@ mod tests {
                 ];
                 game_perm[0..2].shuffle(&mut rng);
                 game_perm[2..4].shuffle(&mut rng);
-                assert_eq!(first_eval, EVALUATOR.evaluate_deal(game_perm));
+                assert_eq!(first_eval, EVALUATOR.evaluate_deal(&game_perm));
             }
         }
+    }
+
+    #[test]
+    fn split_pot_straight() {
+        let straight_deal = [
+            // Traverser cards
+            Card::new(Suit::Spades, Rank::Jack),
+            Card::new(Suit::Clubs, Rank::Jack),
+
+            // Opponent cards
+            Card::new(Suit::Spades, Rank::King),
+            Card::new(Suit::Clubs, Rank::King),
+
+            Card::new(Suit::Hearts, Rank::Two),
+            Card::new(Suit::Diamonds, Rank::Three),
+            Card::new(Suit::Hearts, Rank::Four),
+            Card::new(Suit::Diamonds, Rank::Five),
+            Card::new(Suit::Hearts, Rank::Six),
+        ];
+
+        let result = EVALUATOR.evaluate_deal(&straight_deal);
+        assert_eq!(result, None);
     }
 }

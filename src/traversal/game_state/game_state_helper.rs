@@ -14,6 +14,7 @@ lazy_static! {
     pub static ref EVALUATOR: HandEvaluatorLookup = HandEvaluatorLookup::new();
 }
 
+#[derive(Clone)]
 pub struct GameStateHelper {
     pub game_abstraction: GameAbstraction,
     pub traverser_pot: Cell<u8>,
@@ -31,7 +32,7 @@ pub struct GameStateHelper {
 impl GameStateHelper {
     pub fn new(nine_card_deal: NineCardDeal, small_blind_player: Player) -> GameStateHelper {
         GameStateHelper {
-            game_abstraction: convert_deal_into_abstraction(nine_card_deal, small_blind_player),
+            game_abstraction: convert_deal_into_abstraction(nine_card_deal),
             traverser_pot: Cell::new(if small_blind_player == Player::Traverser {
                 SMALL_BLIND
             } else {
@@ -116,19 +117,12 @@ impl GameStateHelper {
     }
 
     pub fn serialise_history_with_current_player(&self) -> GameAbstractionSerialised {
-        println!("Serialising with current player: {:?}", self.current_player.get());
-        println!("Cards dealt: {}", self.cards_dealt.get());
-        
-        let res = self.game_abstraction.get_abstraction(
+        self.game_abstraction.get_abstraction(
             (self.cards_dealt.get()).saturating_sub(2) as usize,
             self.get_current_player_pot(),
             self.bets_this_round.get(),
-            self.current_player.get(),
-        );
-        if self.current_player.get() != self.small_blind_player && self.current_player.get().is_traverser() && self.bets_this_round.get() == 0 && self.get_current_player_pot() == 2 && self.checks_this_round.get() == 0 && self.cards_dealt.get() == 0 {
-        // println!("Preflop {:?} , cards {}", res, cards_string(&self.get_current_player_cards()));
-        }
-        res 
+            &self.current_player.get(),
+        )
     }
 
     pub fn check_round_terminal(&self) -> TerminalState {
@@ -293,7 +287,7 @@ impl GameStateHelper {
         self.checks_this_round.set(previous_checks);
     }
 
-    pub fn current_state_as_string(&self) -> String{
+    pub fn to_string(&self) -> String{
         format!(
             "Current state: Player Cards: {} Cards dealt: {} Current player: {}\nTraverser pot: {} Opponent pot: {} Bets this round: {} Checks this round: {}",
             cards_string(&self.get_current_player_cards()),

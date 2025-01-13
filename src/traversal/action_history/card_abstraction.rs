@@ -59,6 +59,9 @@ pub fn get_straight_abstraction(
     hole_cards: &[Card; 2],
     board_cards: &[Card],
 ) -> Option<StraightAbstraction> {
+    if board_cards.len() == 0 {
+        return None;
+    }
     let mut rank_counts = [false; 14];
     for card in board_cards {
         let idx = (card.rank.to_int() + 1) as usize;
@@ -599,7 +602,6 @@ pub fn get_flush_abstraction(
     hole_cards: &[Card; 2],
     board_cards: &[Card],
 ) -> Option<FlushAbstraction> {
-    debug_assert!(hole_cards[0].to_int() < hole_cards[1].to_int(), "Hole cards are not sorted: {} {}", hole_cards[0], hole_cards[1]);
     if board_cards.len() == 0 {
         return None;
     }
@@ -876,6 +878,9 @@ pub fn get_connected_card_abstraction(
     hole_cards: &[Card; 2],
     board_cards: &[Card],
 ) -> Option<ConnectedCardsAbstraction> {
+    if board_cards.len() == 0 {
+        return None;
+    }
     let mut rank_counts = [0u8; 13];
     let mut board_has_rank = [false; 13];
     for card in hole_cards {
@@ -911,6 +916,9 @@ pub fn get_connected_card_abstraction(
             _ => {}
         }
         if rank_counts[i] > 1 {
+            if (rank_count == 5) {
+                println!("Five of a kind! {:?}, {:?}", hole_cards, board_cards);
+            }
             counts[rank_count as usize - 2] += 1;
         }
         if board_has_rank[i] {
@@ -1166,11 +1174,4 @@ mod connected_cards_abstraction_tests {
             _ => panic!("Expected Two pair abstraction"),
         }
     }
-}
-
-#[derive(Default)]
-pub struct HoleCardsAbstraction {
-    pub lower_card: Rank,
-    pub higher_card: Rank,
-    pub suited: bool,
 }

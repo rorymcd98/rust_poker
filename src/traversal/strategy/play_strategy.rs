@@ -1,4 +1,4 @@
-use crate::traversal::action_history::action::DEFAULT_ACTION_COUNT;
+use crate::traversal::action_history::action::{self, DEFAULT_ACTION_COUNT};
 
 use super::{strategy_trait::Strategy, training_strategy::{self, TrainingStrategy}};
 
@@ -15,6 +15,7 @@ impl Strategy for PlayStrategy {
         for a in 0..actions {
             play_strategy[a] = 1.0 / actions as f32;
         }
+        play_strategy[0] = 1.0; // TODO - Assess if this at all likely
         PlayStrategy { actions: 0, play_strategy}
     }
 

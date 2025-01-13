@@ -49,7 +49,7 @@ impl BoardAbstraction {
             } else {
                 consective = 0;
             }
-        }
+        // TODO fix tomorrow
 
         let hand_type = match connected_cards {
             [1, 0, 0] => HandType::Pair(Rank::default()),

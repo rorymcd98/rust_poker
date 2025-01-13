@@ -27,7 +27,7 @@ pub fn generate_preflop_abstractions() -> Vec<(StrategyHubKey, GameAbstractionSe
         let card1 = Card::new(Suit::Spades, cards.0);
         let card2 = Card::new(Suit::Clubs, cards.1);
         let deal = Card::new_random_nine_card_game_with(card1, card2, Card::default(), Card::default());
-        let game_abstraction = convert_deal_into_abstraction(deal, Player::Traverser);
+        let game_abstraction = convert_deal_into_abstraction(deal);
         let key = StrategyHubKey {
             low_rank: card1.rank,
             high_rank: card2.rank,
@@ -35,7 +35,7 @@ pub fn generate_preflop_abstractions() -> Vec<(StrategyHubKey, GameAbstractionSe
             is_sb: true,
         };
         // The first preflop action
-        let serialised = game_abstraction.get_abstraction(0, 1, 0, Player::Traverser);
+        let serialised = game_abstraction.get_abstraction(0, 2, 1, &Player::Traverser);
         game_abstractions.push((key, serialised));
     }
     game_abstractions

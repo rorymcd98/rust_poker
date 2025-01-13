@@ -1,14 +1,18 @@
 use base64::Engine;
 use concurrent_queue::ConcurrentQueue;
 use dashmap::DashMap;
+use itertools::Itertools;
+use crate::config::NUM_THREADS;
 use crate::traversal::action_history::action::DEFAULT_ACTION_COUNT;
 use crate::models::Card;
+use crate::traversal::strategy::strategy_hub;
 use super::play_strategy::PlayStrategy;
 use super::strategy_branch::{StrategyBranch, StrategyHubKey};
 use super::strategy_trait::Strategy;
 use super::training_strategy::TrainingStrategy;
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::sync::Arc;
 
 pub const MAX_RETRIES: usize = 1000;
 #[derive(Default, Debug)]
@@ -250,8 +254,8 @@ pub fn serialise_strategy_hub(
     Ok(())
 }
 
-
-pub fn deserialise_strategy_hub<TStrategy: Strategy + Debug>(blueprint_folder: &str) -> Result<HashMap<StrategyHubKey, StrategyBranch<TStrategy>>, io::Error> {
+// Deserialise the strategy hub with multi threading
+pub fn deserialise_strategy_hub<TStrategy: Strategy + Debug + Send + Sync + 'static>(blueprint_folder: &str) -> Result<HashMap<StrategyHubKey, StrategyBranch<TStrategy>>, io::Error> {
     fn parse_filename_to_strategy_element(filename: &str) -> Result<StrategyHubKey, io::Error> {
         let parts: Vec<&str> = filename.split('_').collect();
         if parts.len() != 4 {
@@ -268,53 +272,92 @@ pub fn deserialise_strategy_hub<TStrategy: Strategy + Debug>(blueprint_folder: &
 
     println!("Deserialising strategy hub from {}", blueprint_folder);
 
-    let mut strategy_hub_map = HashMap::new();
-    let mut strategy_size_bytes_compressed = 0;
-    let mut strategy_size_bytes_uncompressed = 0;
+    let strategy_hub_map = Arc::new(DashMap::new());
+    let mut total_strategy_size_bytes_compressed = 0;
+    let mut total_strategy_size_bytes_uncompressed = 0;
 
-    for entry in std::fs::read_dir(blueprint_folder)? {
-        let path = entry?.path();
-        if path.extension().and_then(|s| s.to_str()) != Some("gz") {
-            continue;
-        }
-
-        let mut decompressed_data = String::new();
-        GzDecoder::new(File::open(&path)?).read_to_string(&mut decompressed_data)?;
-
-        // The +1 is for the number of actions - these are stored in cell 0
-        let deserialised: HashMap<String, [f32; DEFAULT_ACTION_COUNT + 1]> = serde_json::from_str(&decompressed_data)?;
-
-        let strategy_hub_element_key = parse_filename_to_strategy_element({
-                strategy_size_bytes_compressed += path.metadata()?.len();
-                path.file_stem().and_then(|s| s.to_str()).ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Invalid file stem"))?
-                .trim_end_matches(".json")
-            }
-        )?;
-
-        println!("Deserialising strategy hub element {}", strategy_hub_element_key);
-
-        let map = deserialised.into_iter().map(|(k, v)| {
-            let infoset_key = base64::engine::general_purpose::STANDARD.decode(&k).map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "Invalid base64 key"))?;
-            let mut array = [0.0; DEFAULT_ACTION_COUNT];
-            array.copy_from_slice(&v[1..]);
-            strategy_size_bytes_uncompressed += std::mem::size_of_val(&array) + std::mem::size_of_val(&infoset_key);
-            let play_strategy = TStrategy::from_existing_strategy(v[0] as usize, {
-                array
-            });
-            Ok((infoset_key, play_strategy))
-        }).collect::<Result<HashMap<_, _>, io::Error>>()?;
-
-        strategy_hub_map.insert(strategy_hub_element_key.clone(), StrategyBranch {
-            strategy_hub_key: strategy_hub_element_key,
-            map,
-            new_generated: 0,
-        });
+    // if the blueprint folder doesn't exist, create it
+    if !std::path::Path::new(blueprint_folder).exists() {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "Blueprint folder does not exist"));
     }
+
+    let blueprint_files = std::fs::read_dir(blueprint_folder)
+        .unwrap()
+        .filter_map(|entry| entry.ok().map(|e| e.path()))
+        .collect::<Vec<_>>();
+    let num_files = blueprint_files.len();
+    let chunks = blueprint_files.into_iter().chunks(num_files / NUM_THREADS);
+    let blueprint_file_chunks = chunks.into_iter().collect::<Vec<_>>();
+
+    fn deserialisation_work<TStrategy: Strategy + 'static>(
+        blueprint_files: Vec<std::path::PathBuf>,
+        strategy_hub_map: &Arc<DashMap<StrategyHubKey, StrategyBranch<TStrategy>>>,
+    ) -> io::Result<(u64, usize)> { // return the compressed size and uncompressed size for logging
+        let mut strategy_size_bytes_compressed = 0;
+        let mut strategy_size_bytes_uncompressed = 0;
+        for path in blueprint_files {
+            if path.extension().and_then(|s| s.to_str()) != Some("gz") {
+                continue;
+            }
+
+            let mut decompressed_data = String::new();
+            GzDecoder::new(File::open(&path)?).read_to_string(&mut decompressed_data)?;
+
+            // The +1 is for the number of actions - these are stored in cell 0
+            let deserialised: HashMap<String, [f32; DEFAULT_ACTION_COUNT + 1]> = serde_json::from_str(&decompressed_data)?;
+
+            let strategy_hub_element_key = parse_filename_to_strategy_element({
+                    strategy_size_bytes_compressed += path.metadata()?.len();
+                    path.file_stem().and_then(|s| s.to_str()).ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Invalid file stem"))?
+                    .trim_end_matches(".json")
+                }
+            )?;
+
+            println!("Deserialising strategy hub element {}", strategy_hub_element_key);
+
+            let map = deserialised.into_iter().map(|(k, v)| {
+                let infoset_key = base64::engine::general_purpose::STANDARD.decode(&k).map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "Invalid base64 key"))?;
+                let mut array = [0.0; DEFAULT_ACTION_COUNT];
+                array.copy_from_slice(&v[1..]);
+                strategy_size_bytes_uncompressed += std::mem::size_of_val(&array) + std::mem::size_of_val(&infoset_key);
+                let play_strategy = TStrategy::from_existing_strategy(v[0] as usize, {
+                    array
+                });
+                Ok((infoset_key, play_strategy))
+            }).collect::<Result<HashMap<_, _>, io::Error>>()?;
+
+            strategy_hub_map.insert(strategy_hub_element_key.clone(), StrategyBranch {
+                strategy_hub_key: strategy_hub_element_key,
+                map,
+                new_generated: 0,
+            });
+        }
+        Ok((strategy_size_bytes_compressed, strategy_size_bytes_uncompressed))
+    }
+
+    let mut handles = Vec::with_capacity(NUM_THREADS);
+    
+    for chunk in blueprint_file_chunks {
+        let chunk = chunk.collect_vec();
+        let strategy_hub_map = Arc::clone(&strategy_hub_map);
+        handles.push(std::thread::spawn(move || {
+            deserialisation_work::<TStrategy>(chunk, &strategy_hub_map)
+        }));
+    }
+
+    for handle in handles {
+        let (strategy_size_bytes_compressed, strategy_size_bytes_uncompressed) = handle.join().unwrap()?;
+        total_strategy_size_bytes_compressed += strategy_size_bytes_compressed;
+        total_strategy_size_bytes_uncompressed += strategy_size_bytes_uncompressed;
+    }
+
+    let strategy_hub_map = Arc::try_unwrap(strategy_hub_map).unwrap();
+    let strategy_hub_map: HashMap<StrategyHubKey, StrategyBranch<TStrategy>> = strategy_hub_map.into_iter().collect();
 
     if strategy_hub_map.len() == 0 {
         return Err(io::Error::new(io::ErrorKind::InvalidData, "No strategy hub elements found"));
     }
 
-    println!("Successfully deserialised strategy hub with {} elements (compressed size {} MB, uncompressed size {} MB)", strategy_hub_map.len(), strategy_size_bytes_compressed/(1024*1024), strategy_size_bytes_uncompressed/(1024*1024));
+    println!("Successfully deserialised strategy hub with {} elements (compressed size {} MB, uncompressed size {} MB)", strategy_hub_map.len(), total_strategy_size_bytes_compressed/(1024*1024), total_strategy_size_bytes_uncompressed/(1024*1024));
     Ok(strategy_hub_map)
 }

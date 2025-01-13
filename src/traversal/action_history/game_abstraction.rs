@@ -8,9 +8,7 @@ use crate::{
     traversal::action_history::card_round_abstraction::CardRoundAbstraction, Card,
 };
 
-use super::{
-    card_abstraction::HoleCardsAbstraction, card_round_abstraction::CardRoundAbstractionSerialised
-};
+use super::card_round_abstraction::CardRoundAbstractionSerialised;
 
 pub type GameAbstractionSerialised = Vec<u8>;
 
@@ -39,13 +37,8 @@ pub fn to_string_game_abstraction(hole1: Rank, hole2: Rank, suited: bool, is_sb:
         )
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct GameAbstraction {
-    // TODO - Make sb_player, traverser_hole_cards, and opponent_hole_cards keys of the StrategyMap rather than members here
-    // This will allow us to access strategies locklessly
-    sb_player: Player,
-    traverser_hole_cards: HoleCardsAbstraction,
-    opponent_hole_cards: HoleCardsAbstraction,
     traverser_round_abstractions: [CardRoundAbstractionSerialised; 4],
     opponent_round_abstractions: [CardRoundAbstractionSerialised; 4],
 }
@@ -56,7 +49,7 @@ impl GameAbstraction {
         round: usize,
         game_pot: u8,
         bets_this_round: u8,
-        current_player: Player,
+        current_player: &Player,
     ) -> GameAbstractionSerialised {
         // [] = 8 bits
         // [round] [game pot] [round bets] [ ... round abstraction ...]
@@ -77,27 +70,14 @@ impl GameAbstraction {
     }
 }
 
-pub fn convert_deal_into_abstraction(deal: NineCardDeal, sb_player: Player) -> GameAbstraction {
-    let traverser_hole_cards = HoleCardsAbstraction {
-        lower_card: deal[0].rank,
-        higher_card: deal[1].rank,
-        suited: deal[0].suit == deal[1].suit,
-    };
-
-    let opponent_hole_cards = HoleCardsAbstraction {
-        lower_card: deal[2].rank,
-        higher_card: deal[3].rank,
-        suited: deal[2].suit == deal[3].suit,
-    };
-
+// TODO - Allow for 7 card abstractions
+pub fn convert_deal_into_abstraction(deal: NineCardDeal) -> GameAbstraction {
     let traverser_round_abstractions = [
         CardRoundAbstraction::new(&[deal[0], deal[1]], &[]).serialise(),
         CardRoundAbstraction::new(&[deal[0], deal[1]], &deal[4..7]).serialise(),
         CardRoundAbstraction::new(&[deal[0], deal[1]], &deal[4..8]).serialise(),
         CardRoundAbstraction::new(&[deal[0], deal[1]], &deal[4..9]).serialise(),
     ];
-
-    println!("Traverser round abstraction: {:?}", traverser_round_abstractions[0].len());
 
     let opponent_round_abstractions = [
         CardRoundAbstraction::new(&[deal[2], deal[3]], &[]).serialise(),
@@ -107,9 +87,6 @@ pub fn convert_deal_into_abstraction(deal: NineCardDeal, sb_player: Player) -> G
     ];
 
     GameAbstraction {
-        sb_player,
-        traverser_hole_cards,
-        opponent_hole_cards,
         traverser_round_abstractions,
         opponent_round_abstractions,
     }

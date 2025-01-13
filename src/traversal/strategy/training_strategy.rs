@@ -25,7 +25,7 @@ pub fn sample_strategy(strategy: &[f32], actions: usize) -> usize {
 /// Constants for the strategy according to the Discounted CFR paper
 const ALPHA: f32 = 1.5;
 const BETA: f32 = 0.85;
-const GAMMA: f32 = 2.0;
+const GAMMA: f32 = 4.0;
 
 /// Strategy struct to hold the current strategy and the sum of all strategies
 #[derive(Clone, Debug)]
@@ -76,7 +76,7 @@ impl TrainingStrategy {
         // println!("updating strategy with utilities, {} . {:?}", strategy_utility, action_utilities);
         let iterf = iteration as f32;
 
-        // Temper the existing regrets sum according to DCRF
+        // Temper the existing regrets sum according to Discount CFR
         let iter_coeff = iterf.powf(ALPHA);
         let positive_regret_mulitipler = iter_coeff / (iter_coeff + 1.0);
         let iter_coeff = iterf.powf(BETA);
@@ -90,6 +90,12 @@ impl TrainingStrategy {
                 self.regrets_sum[a] *= negative_regret_mulitiplier;
             }
         }
+
+
+        // This is CFR+ (not to be used in conjuction with discount CFR)
+        // for a in 0..self.actions {
+        //     self.regrets_sum[a] =  (self.regrets_sum[a] + action_utilities[a] - strategy_utility).max(0.0);
+        // }
 
         if iteration > MIN_SAMPLING_ITERATION_CUTOFF {
             self.update_strategy_sum_iter(iterf);

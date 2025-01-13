@@ -6,7 +6,7 @@ pub const BIG_BLIND: u8 = 2;
 pub const MAX_RAISES: u8 = 4; // Number of raises allowed per round
 
 //// Training configuration
-pub const TRAIN_ITERATIONS: usize = 100_000;
+pub const TRAIN_ITERATIONS: usize = 500_000;
 pub const ITERATION_UPDATES: usize = TRAIN_ITERATIONS / 10;
 pub const NUM_THREADS: usize = 12; // Effectively mulitiplies the iterations for training, but allows for greater concurrency
 

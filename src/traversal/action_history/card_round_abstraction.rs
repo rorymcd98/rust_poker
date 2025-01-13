@@ -49,6 +49,8 @@ impl Display for CardRoundAbstraction {
 
 impl CardRoundAbstraction {
     pub fn new(hole_cards: &[Card; 2], board_cards: &[Card]) -> CardRoundAbstraction {
+        debug_assert!(hole_cards[0].to_int() < hole_cards[1].to_int(), "Hole cards are not sorted: {} {}", hole_cards[0], hole_cards[1]);
+
         let board_abstraction = BoardAbstraction::new(board_cards);
         let connected_cards_abstraction = get_connected_card_abstraction(hole_cards, board_cards);
         let straight_abstraction = get_straight_abstraction(hole_cards, board_cards);
