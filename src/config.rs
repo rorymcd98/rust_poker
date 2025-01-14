@@ -15,4 +15,4 @@ pub const PLAY_ITERATIONS: usize = 10; // number of iterations for subgame solvi
 
 //// Strategy
 pub const MIN_SAMPLING_ITERATION_CUTOFF: usize = TRAIN_ITERATIONS / 2; // Iterations before we apply the min-sampling rule
-pub const MIN_SAMPLING_CUTOFF: f32 = 0.01; // Min sampling rule - we ensure that all actions are sampled at least 1% (e.g.) of the time
+pub const MIN_SAMPLING_CUTOFF: f64 = 0.01; // Min sampling rule - we ensure that all actions are sampled at least 1% (e.g.) of the time

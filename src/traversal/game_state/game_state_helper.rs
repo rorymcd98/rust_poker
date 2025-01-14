@@ -125,9 +125,10 @@ impl GameStateHelper {
         )
     }
 
+    // TODO - massively refactor this method
     pub fn check_round_terminal(&self) -> TerminalState {
         if self.checks_this_round.get() == 2 {
-            return TerminalState::Showdown;
+            return if self.is_river() {TerminalState::Showdown} else {TerminalState::RoundOver};
         }
 
         let terminal_state = if self.opponent_pot.get() == self.traverser_pot.get() {
@@ -159,20 +160,20 @@ impl GameStateHelper {
     }
 
     // If we're at showdown, we lose our pot, or gain the opponent's pot
-    pub fn evaluate_showdown(&self) -> f32 {
+    pub fn evaluate_showdown(&self) -> f64 {
         match self.winner {
-            Some(Player::Traverser) => self.opponent_pot.get() as f32,
-            Some(Player::Opponent) => -(self.traverser_pot.get() as f32),
+            Some(Player::Traverser) => self.opponent_pot.get() as f64,
+            Some(Player::Opponent) => -(self.traverser_pot.get() as f64),
             None => 0.0,
         }
     }
 
     // If we're at fold, the other player has just folded, so the traverser should get their pot
-    pub fn evaluate_fold(&self) -> f32 {
+    pub fn evaluate_fold(&self) -> f64 {
         // validate_history(&self.action_history.borrow().history);
         match self.current_player.get() {
-            Player::Traverser => self.opponent_pot.get() as f32,
-            Player::Opponent => -(self.traverser_pot.get() as f32),
+            Player::Traverser => self.opponent_pot.get() as f64,
+            Player::Opponent => -(self.traverser_pot.get() as f64),
         }
     }
 

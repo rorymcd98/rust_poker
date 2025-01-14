@@ -170,11 +170,11 @@ impl<'a> TrainingBranchTraverser<'a> {
         }
     }
 
-    pub fn begin_traversal(&mut self) -> f32 {
+    pub fn begin_traversal(&mut self) -> f64 {
         self.traverse_action()
     }
 
-    fn traverse_action(&mut self) -> f32 {
+    fn traverse_action(&mut self) -> f64 {
         match self.game_state.check_round_terminal() {
             TerminalState::Showdown => return self.game_state.evaluate_showdown(),
             TerminalState::Fold => return self.game_state.evaluate_fold(),
@@ -219,7 +219,7 @@ impl<'a> TrainingBranchTraverser<'a> {
         }
     }
 
-    fn traverse_chosen_action(&mut self, action: usize, acting_player: Player, current_pot: u8, current_bets: u8, current_checks: u8) -> f32 {
+    fn traverse_chosen_action(&mut self, action: usize, acting_player: Player, current_pot: u8, current_bets: u8, current_checks: u8) -> f64 {
         match action {
             0 => self.game_state.checkfold(),
             1 => self.game_state.call_or_bet(),
@@ -237,7 +237,7 @@ impl<'a> TrainingBranchTraverser<'a> {
         utility
     }
 
-    fn traverse_flop(&mut self) -> f32 {
+    fn traverse_flop(&mut self) -> f64 {
         let previous_player = self.game_state.current_player.get();
         let previous_bets = self.game_state.bets_this_round.get();
         let check_before = self.game_state.checks_this_round.get();
@@ -248,7 +248,7 @@ impl<'a> TrainingBranchTraverser<'a> {
         utility
     }
 
-    fn traverse_deal(&mut self) -> f32 {
+    fn traverse_deal(&mut self) -> f64 {
         let previous_player = self.game_state.current_player.get();
         let previous_bets = self.game_state.bets_this_round.get();
         let checks_before = self.game_state.checks_this_round.get();

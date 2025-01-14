@@ -233,7 +233,7 @@ pub fn serialise_strategy_hub(
                     base64::engine::general_purpose::STANDARD.encode(&k),
                     {
                         let mut array = [0.0; DEFAULT_ACTION_COUNT + 1];
-                        array[0] = v.actions as f32;
+                        array[0] = v.actions as f64;
                         array[1..].copy_from_slice(&PlayStrategy::from_train_strategy(v).get_current_strategy(0));
                         array
                     },
@@ -304,7 +304,7 @@ pub fn deserialise_strategy_hub<TStrategy: Strategy + Debug + Send + Sync + 'sta
             GzDecoder::new(File::open(&path)?).read_to_string(&mut decompressed_data)?;
 
             // The +1 is for the number of actions - these are stored in cell 0
-            let deserialised: HashMap<String, [f32; DEFAULT_ACTION_COUNT + 1]> = serde_json::from_str(&decompressed_data)?;
+            let deserialised: HashMap<String, [f64; DEFAULT_ACTION_COUNT + 1]> = serde_json::from_str(&decompressed_data)?;
 
             let strategy_hub_element_key = parse_filename_to_strategy_element({
                     strategy_size_bytes_compressed += path.metadata()?.len();

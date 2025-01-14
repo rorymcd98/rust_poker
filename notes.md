@@ -43,3 +43,17 @@ Profiling
 Move the hole cards abstraction off of the branch
 Reduce the amoutn of cloning
 Do a unit test for split pot evaluations
+
+
+
+
+traverser_pot: 54, opponent_pot: 50, current Tra, bets 4, checks 0
+Folded Opp
+Opp - Action: 1/2
+traverser_pot: 54, opponent_pot: 54, current Tra, bets 4, checks 0
+Showdown
+cards dealt: 5
+Utility: 9.843870212623786
+Trav seen: 486755280, Trav not seen: 54760860
+Opp seen: 474842960, Opp not seen: 64532800
+Utility: 9.843870212623786

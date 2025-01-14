@@ -25,8 +25,8 @@ use crate::traversal::strategy::strategy_trait::Strategy;
 
 /// When calculating the gifts, we must TODO finish this comment 
 struct CalculateBestValueNode {
-    pub weighted_value_sum: f32,
-    pub total_reach: f32,
+    pub weighted_value_sum: f64,
+    pub total_reach: f64,
 }
 
 struct GameStateFromActions {
@@ -53,7 +53,7 @@ pub fn solve_cbr_utilties() {
     let strategy_hub = deserialise_strategy_hub::<PlayStrategy>(BLUEPRINT_FOLDER).unwrap();
     let opponent_strategy_map = strategy_hub.into_iter().collect::<DashMap<StrategyHubKey, StrategyBranch<_>>>();
 
-    let player_hand = [Card::new(Suit::Spades, Rank::King), Card::new(Suit::Clubs, Rank::King)];
+    let player_hand = [Card::new(Suit::Spades, Rank::Eight), Card::new(Suit::Clubs, Rank::Jack)];
 
 
     let traverser_key = StrategyHubKey {
@@ -68,7 +68,7 @@ pub fn solve_cbr_utilties() {
     // Look for the gifts give on the Bet node
     let action_history = &vec![
         Action::Bet,  Action::Bet, Action::Bet, Action::Call,
-        Action::Deal(Card::new(Suit::Clubs, Rank::Two)), Action::Deal(Card::new(Suit::Spades, Rank::Three)), Action::Deal(Card::new(Suit::Clubs, Rank::Four)),
+        Action::Deal(Card::new(Suit::Clubs, Rank::Three)), Action::Deal(Card::new(Suit::Spades, Rank::Nine)), Action::Deal(Card::new(Suit::Clubs, Rank::King)),
         Action::CheckFold, //Action::Bet, Action::Call, 
         //Action::Deal(Card::new(Suit::Diamonds, Rank::Five)),
         //Action::CheckFold,// Action::Bet, Action::Call, 
@@ -125,7 +125,7 @@ pub fn solve_cbr_utilties() {
 
     let mut all_game_abstractions = Vec::with_capacity(potential_card_histories.len());
     let mut all_evaluations = Vec::with_capacity(potential_card_histories.len());
-    let mut strategy_hub_keys = Vec::with_capacity(potential_card_histories.len());
+    let mut opponent_strategy_hub_keys = Vec::with_capacity(potential_card_histories.len());
 
     for cards in potential_card_histories {
         deal[2] = cards[0];
@@ -143,11 +143,27 @@ pub fn solve_cbr_utilties() {
             is_suited: deal[2].suit == deal[3].suit,
             is_sb: sb_player == Player::Opponent,
         };
-        strategy_hub_keys.push(key);
+        opponent_strategy_hub_keys.push(key);
     }
 
-    // println!("{}", game_state.to_string());
-    //  return;
+    // Sort the opponenet helpers according to the abstraction to increase the likelihood of cache hits
+    let mut combined: Vec<_> = all_game_abstractions
+        .iter()
+        .zip(all_evaluations.iter())
+        .zip(opponent_strategy_hub_keys.iter())
+        .collect();
+
+    combined.sort_by(|((a, _), _), ((b, _), _)| a.get_abstraction(2, 0, 0, &Player::Opponent).cmp(&b.get_abstraction(2, 0, 0, &Player::Opponent)));
+
+    let mut all_game_abstractions = vec![GameAbstraction::default(); combined.len()];
+    let mut all_evaluations = vec![None; combined.len()];
+    let mut opponent_strategy_hub_keys = vec![StrategyHubKey::default(); combined.len()];
+
+    for i in 0..combined.len() {
+        all_game_abstractions[i] = combined[i].0 .0.clone(); // TODO - get rid of cloning. Make this wholee thing niceer
+        all_evaluations[i] = *combined[i].0.1;
+        opponent_strategy_hub_keys[i] = combined[i].1.clone();
+    }
 
     let mut cbv_solver = CbvSolver{
         traverser_strategy: traverser_strategy_branch,
@@ -155,7 +171,7 @@ pub fn solve_cbr_utilties() {
         game_state,
         evaluations: all_evaluations,
         game_abstractions: all_game_abstractions,
-        strategy_hub_keys,
+        strategy_hub_keys: opponent_strategy_hub_keys,
 
         trav_seen: Cell::new(0),
         opp_seen: Cell::new(0),
@@ -167,7 +183,7 @@ pub fn solve_cbr_utilties() {
     println!("Utility: {}", utility);
 }
 
-type CbvReturn = Vec<f32>; // Utilitiy for each deal
+type CbvReturn = Vec<f64>; // Utilitiy for each deal
 
 struct CbvSolver<'a> {
     traverser_strategy: StrategyBranch<PlayStrategy>,
@@ -184,19 +200,20 @@ struct CbvSolver<'a> {
 }
 
 impl<'a> CbvSolver<'a> {
-    pub fn calculate_cbv(&mut self, action_history: &Vec<Action>) -> f32 { // TODO - move Vec<Action> to the struct
+    pub fn calculate_cbv(&mut self, action_history: &Vec<Action>) -> f64 { // TODO - move Vec<Action> to the struct
         let initial_reaches = self.calculate_initial_reaches(action_history);
-        // println!("Initial reaches: {:?}", initial_reaches);
+        println!("reaches sum {}", initial_reaches.iter().sum::<f64>());
         // return 0.0;
+        // let initial_reaches = vec![1.0; self.game_abstractions.len()];
         let traverser_utility = self.traverse_action(&initial_reaches); // need to weight by reaches
-        let res = traverser_utility.iter().sum::<f32>() / initial_reaches.iter().sum::<f32>();
+        let res = traverser_utility.iter().sum::<f64>() / initial_reaches.iter().sum::<f64>();
         println!("Utility: {}", res);
         println!("Trav seen: {}, Trav not seen: {}", self.trav_seen.get(), self.trav_not_seen.get());
         println!("Opp seen: {}, Opp not seen: {}", self.opp_seen.get(), self.opp_not_seen.get());
         res
     }
 
-    fn calculate_initial_reaches(&self, action_history: &Vec<Action>) -> Vec<f32> {
+    fn calculate_initial_reaches(&self, action_history: &Vec<Action>) -> Vec<f64> {
         let mut reaches = vec![1.0; self.game_abstractions.len()];
         let game_state = GameStateHelper::new(self.game_state.cards, self.game_state.small_blind_player);
         game_state.cards_dealt.set(0);
@@ -207,8 +224,6 @@ impl<'a> CbvSolver<'a> {
             let bets_this_round = game_state.bets_this_round.get();
             let num_available_actions = game_state.get_num_available_actions();
 
-            println!("player {}, action {}, round {}, current_player_pot {}, bets_this_round {}, num_available_actions {}", game_state.get_current_player(), action,  round, current_player_pot, bets_this_round, num_available_actions);
-
             match action {
                 Action::Deal(_) => {
                     game_state.deal();
@@ -216,19 +231,18 @@ impl<'a> CbvSolver<'a> {
                 Action::Bet => {
                     match game_state.current_player.get() {
                         Player::Traverser => {
-                            // The traverser strategy is the same up until we begin branching - hence deal_index 0 (we could use any deal index here)
                             let strategy = self.get_traverser_strategy(0, round, current_player_pot, bets_this_round, num_available_actions);
-                            for deal_index in 0..self.game_abstractions.len() {
-                                let action_probability = strategy[2.max(num_available_actions-1)];
-                                reaches[deal_index] *= action_probability;
-                            }
+                            reaches.iter_mut().skip_while(|reach| **reach == 0.0).for_each(|reach| {
+                                let action_probability = strategy.0[2.max(num_available_actions-1)];
+                                *reach *= action_probability;
+                            });
                         },
                         Player::Opponent => {
-                            for deal_index in 0..self.game_abstractions.len() {
+                            reaches.iter_mut().skip_while(|reach| **reach == 0.0).enumerate().for_each(|(deal_index, reach)| {
                                 let strategy = self.get_opponent_strategy(deal_index, round, current_player_pot, bets_this_round, num_available_actions);
-                                let action_probability = strategy[2.max(num_available_actions-1)];
-                                reaches[deal_index] *= action_probability;
-                            }
+                                let action_probability = strategy.0[2.max(num_available_actions-1)];
+                                *reach *= action_probability;
+                            });
                         }
                     }
                     game_state.bet();
@@ -237,20 +251,18 @@ impl<'a> CbvSolver<'a> {
                 Action::Call => {
                     match game_state.current_player.get() {
                         Player::Traverser => {
-                            // ditto
                             let strategy = self.get_traverser_strategy(0, round, current_player_pot, bets_this_round, num_available_actions);
-                            for deal_index in 0..self.game_abstractions.len() {
-                                let action_probability = strategy[1];
-                                reaches[deal_index] *= action_probability;
-                            }
+                            reaches.iter_mut().skip_while(|reach| **reach == 0.0).for_each(|reach| {
+                                let action_probability = strategy.0[1];
+                                *reach *= action_probability;
+                            });
                         },
                         Player::Opponent => {
-                            for deal_index in 0..self.game_abstractions.len() {
+                            reaches.iter_mut().skip_while(|reach| **reach == 0.0).enumerate().for_each(|(deal_index, reach)| {
                                 let strategy = self.get_opponent_strategy(deal_index, round, current_player_pot, bets_this_round, num_available_actions);
-                                //println!("Strategy: {:?}", strategy);
-                                let action_probability = strategy[1];
-                                reaches[deal_index] *= action_probability;
-                            }
+                                let action_probability = strategy.0[1];
+                                *reach *= action_probability;
+                            });
                         }
                     }
                     game_state.call();
@@ -259,20 +271,19 @@ impl<'a> CbvSolver<'a> {
                 Action::CheckFold => {
                     match game_state.current_player.get() {
                         Player::Traverser => {
-                            // ditto
+                            // TODO - Check if the strategy is identical for all deals here - it should be
                             let strategy = self.get_traverser_strategy(0, round, current_player_pot, bets_this_round, num_available_actions);
-                            for deal_index in 0..self.game_abstractions.len() {
-                                let action_probability = strategy[0];
-                                reaches[deal_index] *= action_probability;
-                            }
+                            reaches.iter_mut().skip_while(|reach| **reach == 0.0).for_each(|reach| {
+                                let action_probability = strategy.0[0];
+                                *reach *= action_probability;
+                            });
                         },
                         Player::Opponent => {
-                            for deal_index in 0..self.game_abstractions.len() {
+                            reaches.iter_mut().skip_while(|x| **x == 0.0).enumerate().for_each(|(deal_index, reach)| {
                                 let strategy = self.get_opponent_strategy(deal_index, round, current_player_pot, bets_this_round, num_available_actions);
-                                //println!("Strategy: {:?}", strategy);
-                                let action_probability = strategy[0];
-                                reaches[deal_index] *= action_probability;
-                            }
+                                let action_probability = strategy.0[0];
+                                *reach *= action_probability;
+                            });
                         }
                     }
                     game_state.checkfold();
@@ -284,7 +295,7 @@ impl<'a> CbvSolver<'a> {
         reaches
     }
 
-    pub fn evaluate_showdown(&self, deal_index: usize, traverser_pot: f32, opponent_pot: f32) -> f32 {
+    pub fn evaluate_showdown(&self, deal_index: usize, traverser_pot: f64, opponent_pot: f64) -> f64 {
         let winner = self.evaluations[deal_index];
         match winner {
             Some(Player::Traverser) => opponent_pot,
@@ -293,7 +304,7 @@ impl<'a> CbvSolver<'a> {
         }
     }
     
-    pub fn evaluate_fold(&self, current_player: &Player, traverser_pot: f32, opponent_pot: f32) -> f32 {
+    pub fn evaluate_fold(&self, current_player: &Player, traverser_pot: f64, opponent_pot: f64) -> f64 {
         match current_player {
             Player::Traverser => opponent_pot,
             Player::Opponent => -traverser_pot,
@@ -302,30 +313,33 @@ impl<'a> CbvSolver<'a> {
 
     // If Traverser, next reaches in the action probs
     // If Opponent, next reaches is dependent on the strategy for each hc
-    fn traverse_action(&mut self, reaches: &Vec<f32>) -> CbvReturn {
+    fn traverse_action(&mut self, reaches: &Vec<f64>) -> CbvReturn {
         let num_available_actions = self.game_state.get_num_available_actions();
-
+        
         // Cache these
-        let traverser_pot = self.game_state.traverser_pot.get() as f32;
-        let opponent_pot = self.game_state.opponent_pot.get() as f32;
+        let traverser_pot = self.game_state.traverser_pot.get() as f64;
+        let opponent_pot = self.game_state.opponent_pot.get() as f64;
         let current_player = self.game_state.current_player.get();
+        // let bets_this_round = self.game_state.bets_this_round.get();
+        // let checks_this_round = self.game_state.checks_this_round.get();
+        // println!("traverser_pot: {}, opponent_pot: {}, current {}, bets {}, checks {}", traverser_pot, opponent_pot, current_player, bets_this_round, checks_this_round);
 
-        let mut cbv_return = Vec::with_capacity(self.game_abstractions.len());
         
         match self.game_state.check_round_terminal() {
             TerminalState::Showdown => {
-                for deal_index in 0..self.game_abstractions.len() {
+                let mut cbv_return = reaches.clone();
+                cbv_return.iter_mut().skip_while(|reach| **reach == 0.0).enumerate().for_each(|(deal_index, reach)| {
+                    println!("reach: {}", reach);
                     let showdown_utility = self.evaluate_showdown(deal_index, traverser_pot, opponent_pot);
-                    cbv_return.push(showdown_utility * reaches[deal_index]);
-                };
+                    *reach *= showdown_utility;
+                });
                 return cbv_return;
             },
             TerminalState::Fold => {
                 // Don't need to iterate over the game abstractions here because:
                 // (n*A + n*B + n*C) / (A + B + C) = n
                 // Where n is the (constant for this node) fold utility for this infoset and A, B, C are the reaches
-                cbv_return = vec![self.evaluate_fold(&current_player, traverser_pot, opponent_pot); self.game_abstractions.len()];
-                return cbv_return;
+                return vec![self.evaluate_fold(&current_player, traverser_pot, opponent_pot); self.game_abstractions.len()];
             }
             TerminalState::RoundOver => {
                 if self.game_state.is_preflop() {
@@ -337,7 +351,6 @@ impl<'a> CbvSolver<'a> {
             TerminalState::None => {
                 let round = (self.game_state.cards_dealt.get()).saturating_sub(2) as usize;
                 let bets_this_round = self.game_state.bets_this_round.get();
-                
                 let pot_before_action = self.game_state.get_current_player_pot();
                 let bets_before_action = self.game_state.bets_this_round.get();
                 let previous_player = self.game_state.current_player.get();
@@ -349,32 +362,37 @@ impl<'a> CbvSolver<'a> {
         };
     }
 
-    fn action_value(&mut self, reaches: &Vec<f32>, num_available_actions: usize, current_player: Player, round: usize, bets_this_round: u8, pot_before_action: u8, bets_before_action: u8, previous_player: Player, checks_before: u8) -> CbvReturn {
+    fn action_value(&mut self, reaches: &Vec<f64>, num_available_actions: usize, current_player: Player, round: usize, bets_this_round: u8, pot_before_action: u8, bets_before_action: u8, previous_player: Player, checks_before: u8) -> CbvReturn {
         let mut reaches_for_actions = vec![vec![0.0; self.game_abstractions.len()]; num_available_actions];
-        let mut action_probabilities = vec![[0f32; DEFAULT_ACTION_COUNT]; self.game_abstractions.len()];
+        let mut action_probabilities = vec![[0f64; DEFAULT_ACTION_COUNT]; self.game_abstractions.len()];
         
         // TODO - Not sure if its right to calculate the reaches the same for opponent and traverser here
-        for deal_index in 0..self.game_abstractions.len() {
+        let (first_strategy, mut serialised_abstraction) = match current_player {
+            Player::Traverser => self.get_traverser_strategy(0, round, pot_before_action, bets_this_round, num_available_actions),
+            Player::Opponent => self.get_opponent_strategy(0, round, pot_before_action, bets_this_round, num_available_actions),
+        };
+        for (deal_index, reach) in reaches.iter().skip_while(|reach| **reach == 0.0).enumerate() {
             let strategy = match current_player {
-                Player::Traverser => self.get_traverser_strategy(deal_index, round, pot_before_action, bets_this_round, num_available_actions),
-                Player::Opponent => self.get_opponent_strategy(deal_index, round, pot_before_action, bets_this_round, num_available_actions),
+                Player::Traverser => self.get_traverser_strategy_cache(deal_index, round, num_available_actions, &mut serialised_abstraction, first_strategy),
+                Player::Opponent => self.get_opponent_strategy_cache(deal_index, round, num_available_actions, &mut serialised_abstraction, first_strategy),
             };
             for action in 0..num_available_actions {
                 // store the reaches for each action
-                reaches_for_actions[action][deal_index] = reaches[deal_index] * strategy[action];
+                reaches_for_actions[action][deal_index] = reach * strategy[action];
             }
             action_probabilities[deal_index] = strategy;
         }
         
         let mut action_abstraction_utilities = vec![Vec::with_capacity(self.game_abstractions.len()); num_available_actions]; // TODO - Should use option
         for action in 0..num_available_actions {
-            // TODO - We could prune here if next_reaches sum is close to 0
             let next_reaches = &reaches_for_actions[action];
+            println!("Playing action {}/{}, player {}, round {}, pot {}, bets {}, checks {}", action, num_available_actions, current_player, round, pot_before_action, bets_before_action, checks_before);
+
             action_abstraction_utilities[action] = self.traverse_chosen_action(next_reaches, action, previous_player, pot_before_action, bets_before_action, checks_before);
         }
 
         if self.game_state.current_player.get() == Player::Traverser {
-            let mut max_utility = f32::NEG_INFINITY;
+            let mut max_utility = f64::NEG_INFINITY;
             let mut best_action_utilities = vec![0.0; self.game_abstractions.len()];
             let mut best_action_count = 0;
 
@@ -403,7 +421,7 @@ impl<'a> CbvSolver<'a> {
 
             if best_action_count > 1 {
                 for deal_index in 0..self.game_abstractions.len() {
-                    best_action_utilities[deal_index] /= best_action_count as f32;
+                    best_action_utilities[deal_index] /= best_action_count as f64;
                 }
             }
             return best_action_utilities;
@@ -419,14 +437,14 @@ impl<'a> CbvSolver<'a> {
         };
     }
 
-    fn traverse_chosen_action(&mut self, reaches: &Vec<f32>, action: usize, acting_player: Player, current_pot: u8, current_bets: u8, current_checks: u8) -> CbvReturn {
-        self.game_state.switch_current_player();
+    fn traverse_chosen_action(&mut self, reaches: &Vec<f64>, action: usize, acting_player: Player, current_pot: u8, current_bets: u8, current_checks: u8) -> CbvReturn {
         match action {
             0 => self.game_state.checkfold(),
             1 => self.game_state.call_or_bet(),
             2 => self.game_state.bet(),
             _ => {}
         };
+        self.game_state.switch_current_player();
         let utility = self.traverse_action(reaches);
         self.game_state.undo(
             acting_player,
@@ -437,7 +455,7 @@ impl<'a> CbvSolver<'a> {
         utility
     }
 
-    fn traverse_flop(&mut self, reaches: &Vec<f32>) -> CbvReturn {
+    fn traverse_flop(&mut self, reaches: &Vec<f64>) -> CbvReturn {
         let previous_player = self.game_state.current_player.get();
         let previous_bets = self.game_state.bets_this_round.get();
         let check_before = self.game_state.checks_this_round.get();
@@ -449,7 +467,7 @@ impl<'a> CbvSolver<'a> {
         utility
     }
 
-    fn traverse_deal(&mut self, reaches: &Vec<f32>) -> CbvReturn {
+    fn traverse_deal(&mut self, reaches: &Vec<f64>) -> CbvReturn {
         let previous_player = self.game_state.current_player.get();
         let previous_bets = self.game_state.bets_this_round.get();
         let checks_before = self.game_state.checks_this_round.get();
@@ -462,7 +480,7 @@ impl<'a> CbvSolver<'a> {
         utility
     }
 
-    fn get_opponent_strategy(&self, deal_index: usize, round: usize, current_player_pot: u8, bets_this_round: u8, num_available_actions: usize) -> [f32; DEFAULT_ACTION_COUNT] {
+    fn get_opponent_strategy(&self, deal_index: usize, round: usize, current_player_pot: u8, bets_this_round: u8, num_available_actions: usize) -> ([f64; DEFAULT_ACTION_COUNT], GameAbstractionSerialised) {
         let game_abstraction = &self.game_abstractions[deal_index];
         // TODO - massively inefficient to regenerate this every time
         let serialised_abstraction = game_abstraction.get_abstraction(
@@ -475,24 +493,43 @@ impl<'a> CbvSolver<'a> {
         let strategy_hub_key = &self.strategy_hub_keys[deal_index];
         
         let strategy= self.opponent_strategy_map
-        .get(&strategy_hub_key)
-        .and_then(|strategy_branch| strategy_branch.get_strategy(&serialised_abstraction).cloned());
+            .get(&strategy_hub_key)
+            .and_then(|strategy_branch| strategy_branch.get_strategy(&serialised_abstraction).cloned());
     
-    
-        if strategy.is_none() {
-            println!("Strategy hub key: {:?}, round {}, bets {}, pot {}", strategy_hub_key, round, bets_this_round, current_player_pot);
-            self.opp_not_seen.set(self.opp_not_seen.get() + 1);
-        } else {
-            self.opp_seen.set(self.opp_seen.get() + 1);
-        }
-
-        match strategy {
+        let strategy = match strategy {
             Some(strategy) => strategy.get_current_strategy(0),
-            None => [1.0 / (num_available_actions as f32); DEFAULT_ACTION_COUNT],
-        }
+            None => [1.0 / (num_available_actions as f64); DEFAULT_ACTION_COUNT],
+        };
+        (strategy, serialised_abstraction)
     }
 
-    fn get_traverser_strategy(&self, deal_index: usize, round: usize, current_player_pot: u8, bets_this_round: u8, num_available_actions: usize) -> [f32; DEFAULT_ACTION_COUNT] {
+    fn get_opponent_strategy_cache(&self, deal_index: usize, round: usize, num_available_actions: usize, previous_game_abstraction_ser: &mut GameAbstractionSerialised, previous_strategy: [f64; DEFAULT_ACTION_COUNT]) -> [f64; DEFAULT_ACTION_COUNT] {
+        let game_abstraction = &self.game_abstractions[deal_index];
+        // TODO - massively inefficient to regenerate this every time
+        let identical = game_abstraction.replace_round_abstraction(
+            previous_game_abstraction_ser,
+            round,
+            &Player::Opponent, 
+        );
+
+        if identical {
+            return previous_strategy;
+        }
+
+        let strategy_hub_key = &self.strategy_hub_keys[deal_index];
+        
+        let strategy= self.opponent_strategy_map
+            .get(&strategy_hub_key)
+            .and_then(|strategy_branch| strategy_branch.get_strategy(&previous_game_abstraction_ser).cloned());
+    
+        let strategy = match strategy {
+            Some(strategy) => strategy.get_current_strategy(0),
+            None => [1.0 / (num_available_actions as f64); DEFAULT_ACTION_COUNT],
+        };
+        strategy
+    }
+
+    fn get_traverser_strategy(&self, deal_index: usize, round: usize, current_player_pot: u8, bets_this_round: u8, num_available_actions: usize) -> ([f64; DEFAULT_ACTION_COUNT], GameAbstractionSerialised) {
         let game_abstraction = &self.game_abstractions[deal_index];
         let serialised_abstraction = game_abstraction.get_abstraction(
             round,
@@ -504,14 +541,31 @@ impl<'a> CbvSolver<'a> {
         let strategy = self.traverser_strategy
                 .get_strategy(&serialised_abstraction);
 
-        if strategy.is_none() {
-            self.trav_not_seen.set(self.trav_not_seen.get() + 1);
-        } else {
-            self.trav_seen.set(self.trav_seen.get() + 1);
+        let strategy = match strategy {
+            Some(strategy) => strategy.get_current_strategy(0),
+            None => [1.0 / (num_available_actions as f64); DEFAULT_ACTION_COUNT],
+        };
+        (strategy, serialised_abstraction)
+    }
+
+    fn get_traverser_strategy_cache(&self, deal_index: usize, round: usize, num_available_actions: usize, previous_game_abstraction_ser: &mut GameAbstractionSerialised, previous_strategy: [f64; DEFAULT_ACTION_COUNT]) -> [f64; DEFAULT_ACTION_COUNT] {
+        let game_abstraction = &self.game_abstractions[deal_index];
+        let identical = game_abstraction.replace_round_abstraction(
+            previous_game_abstraction_ser,
+            round,
+            &Player::Traverser, 
+        );
+
+        if identical {
+            return previous_strategy;
         }
+
+        let strategy = self.traverser_strategy
+                .get_strategy(&previous_game_abstraction_ser);
+
         match strategy {
             Some(strategy) => strategy.get_current_strategy(0),
-            None => [1.0 / (num_available_actions as f32); DEFAULT_ACTION_COUNT],
+            None => [1.0 / (num_available_actions as f64); DEFAULT_ACTION_COUNT],
         }
     }
 }

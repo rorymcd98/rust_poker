@@ -51,22 +51,34 @@ impl GameAbstraction {
         bets_this_round: u8,
         current_player: &Player,
     ) -> GameAbstractionSerialised {
-        // [] = 8 bits
+        // TODO - Compress this down
+        // [_] = 8 bits
         // [round] [game pot] [round bets] [ ... round abstraction ...]
-
 
         let round_abstraction = match current_player {
             Player::Traverser => &self.traverser_round_abstractions[round],
             Player::Opponent => &self.opponent_round_abstractions[round],
         };
 
-        // 10010
         let mut serialised = vec![];
         serialised.push(round as u8);
         serialised.push(game_pot);
         serialised.push(bets_this_round);
         serialised.extend(round_abstraction.clone());
         serialised
+    }
+
+    /// Replace the round abstraction for the current player without creating a whole new vec
+    pub fn replace_round_abstraction(&self, game_abstraction_serialised: &mut GameAbstractionSerialised, round: usize, current_player: &Player) -> bool {
+        let round_abstraction = match current_player {
+            Player::Traverser => &self.traverser_round_abstractions[round],
+            Player::Opponent => &self.opponent_round_abstractions[round],
+        };
+        let identical = game_abstraction_serialised[3..] == round_abstraction[..];
+        if !identical {
+            game_abstraction_serialised.splice(3.., round_abstraction.iter().cloned());
+        }
+        identical
     }
 }
 
