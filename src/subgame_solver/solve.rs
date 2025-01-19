@@ -1,23 +1,21 @@
-use std::cell::{Cell, RefCell};
-use std::collections::HashSet;
-use std::sync::Arc;
+use std::cell::Cell;
+use std::collections::{HashMap, HashSet};
+use std::hash::{Hash, Hasher};
 use std::vec;
 
 use dashmap::DashMap;
 use itertools::Itertools;
-use rand::distributions::weighted;
 use rust_poker::config::{BIG_BLIND, BLUEPRINT_FOLDER};
 
 use crate::evaluate::evaluate_hand::HandEvaluator;
-use crate::models::card::{all_pocket_pairs, all_rank_combos, NineCardDeal, Rank};
+use crate::models::card::{NineCardDeal, Rank};
 use crate::models::{Card, Player, Suit};
 use crate::traversal::action_history::action::{self, Action, DEFAULT_ACTION_COUNT};
-use crate::traversal::action_history::action_history::ActionHistory;
+use crate::traversal::action_history::card_round_abstraction::CardRoundAbstractionSerialised;
 use crate::traversal::action_history::game_abstraction::{self, convert_deal_into_abstraction, to_string_game_abstraction, GameAbstraction, GameAbstractionSerialised};
 use crate::traversal::game_state::game_state_helper::{GameStateHelper, EVALUATOR};
 use crate::traversal::game_state::terminal_state::TerminalState;
 use crate::traversal::main_train::{get_all_combos_by_blind, get_unique_cards};
-use crate::traversal::strategy;
 use crate::traversal::strategy::play_strategy::PlayStrategy;
 use crate::traversal::strategy::strategy_branch::{StrategyBranch, StrategyHubKey};
 use crate::traversal::strategy::strategy_hub::{deserialise_strategy_hub, StrategyHub};
@@ -27,6 +25,29 @@ use crate::traversal::strategy::strategy_trait::Strategy;
 struct CalculateBestValueNode {
     pub weighted_value_sum: f64,
     pub total_reach: f64,
+}
+
+struct GameTreePath {
+    pub abstraction: GameAbstraction,
+    pub evaluation: Option<Player>,
+    pub strategy_hub_key: StrategyHubKey,
+    pub weight: usize,
+}
+
+type GameTreePathKey = (StrategyHubKey, u8, [CardRoundAbstractionSerialised; 4]);
+
+impl GameTreePath {
+    pub fn get_game_path_key(&self) -> GameTreePathKey {
+        (
+            self.strategy_hub_key.clone(),
+            match self.evaluation {
+                None => 0,
+                Some(Player::Traverser) => 1,
+                Some(Player::Opponent) => 2,
+            },
+            self.abstraction.opponent_round_abstractions.clone(),
+        )
+    }
 }
 
 struct GameStateFromActions {
@@ -53,7 +74,7 @@ pub fn solve_cbr_utilties() {
     let strategy_hub = deserialise_strategy_hub::<PlayStrategy>(BLUEPRINT_FOLDER).unwrap();
     let opponent_strategy_map = strategy_hub.into_iter().collect::<DashMap<StrategyHubKey, StrategyBranch<_>>>();
 
-    let player_hand = [Card::new(Suit::Spades, Rank::Eight), Card::new(Suit::Clubs, Rank::Jack)];
+    let player_hand = [Card::new(Suit::Spades, Rank::King), Card::new(Suit::Clubs, Rank::King)];
 
 
     let traverser_key = StrategyHubKey {
@@ -67,12 +88,12 @@ pub fn solve_cbr_utilties() {
 
     // Look for the gifts give on the Bet node
     let action_history = &vec![
-        Action::Bet,  Action::Bet, Action::Bet, Action::Call,
-        Action::Deal(Card::new(Suit::Clubs, Rank::Three)), Action::Deal(Card::new(Suit::Spades, Rank::Nine)), Action::Deal(Card::new(Suit::Clubs, Rank::King)),
-        Action::CheckFold, //Action::Bet, Action::Call, 
-        //Action::Deal(Card::new(Suit::Diamonds, Rank::Five)),
-        //Action::CheckFold,// Action::Bet, Action::Call, 
-        //Action::Deal(Card::new(Suit::Clubs, Rank::Six)),
+        Action::Bet,  Action::Bet, Action::Bet,Action::Bet, Action::Call,
+        Action::Deal(Card::new(Suit::Clubs, Rank::Three)), Action::Deal(Card::new(Suit::Spades, Rank::Nine)), Action::Deal(Card::new(Suit::Hearts, Rank::Queen)),
+        Action::CheckFold, Action::Bet, Action::Call, 
+        // Action::Deal(Card::new(Suit::Diamonds, Rank::Five)),
+        // Action::CheckFold, Action::Bet, Action::Call, 
+        // Action::Deal(Card::new(Suit::Clubs, Rank::Six)),
         //Action::Bet, //Action::Bet, Action::Bet//, Action::Bet, Action::Call
     ];
 
@@ -123,6 +144,8 @@ pub fn solve_cbr_utilties() {
     deal[0] = player_hand[0];
     deal[1] = player_hand[1];
 
+    // group by abstraction and outcome
+
     let mut all_game_abstractions = Vec::with_capacity(potential_card_histories.len());
     let mut all_evaluations = Vec::with_capacity(potential_card_histories.len());
     let mut opponent_strategy_hub_keys = Vec::with_capacity(potential_card_histories.len());
@@ -146,32 +169,42 @@ pub fn solve_cbr_utilties() {
         opponent_strategy_hub_keys.push(key);
     }
 
-    // Sort the opponenet helpers according to the abstraction to increase the likelihood of cache hits
-    let mut combined: Vec<_> = all_game_abstractions
-        .iter()
-        .zip(all_evaluations.iter())
-        .zip(opponent_strategy_hub_keys.iter())
-        .collect();
+    let mut game_tree_paths = all_game_abstractions.iter().zip(all_evaluations.iter()).zip(opponent_strategy_hub_keys.iter()).map(|((abstraction, evaluation), key)| {
+        GameTreePath {
+            abstraction: abstraction.clone(),
+            evaluation: *evaluation,
+            strategy_hub_key: key.clone(),
+            weight: 1,
+        }
+    }).collect::<Vec<_>>();
 
-    combined.sort_by(|((a, _), _), ((b, _), _)| a.get_abstraction(2, 0, 0, &Player::Opponent).cmp(&b.get_abstraction(2, 0, 0, &Player::Opponent)));
-
-    let mut all_game_abstractions = vec![GameAbstraction::default(); combined.len()];
-    let mut all_evaluations = vec![None; combined.len()];
-    let mut opponent_strategy_hub_keys = vec![StrategyHubKey::default(); combined.len()];
-
-    for i in 0..combined.len() {
-        all_game_abstractions[i] = combined[i].0 .0.clone(); // TODO - get rid of cloning. Make this wholee thing niceer
-        all_evaluations[i] = *combined[i].0.1;
-        opponent_strategy_hub_keys[i] = combined[i].1.clone();
+    // Reduce the game tree paths to unique paths (same abstraction and evaluation)
+    let mut path_map: HashMap<GameTreePathKey, GameTreePath> = HashMap::new();
+    println!("Game tree paths: {}", game_tree_paths.len());
+    
+    for path in game_tree_paths {
+        path_map.entry(path.get_game_path_key()).and_modify(|existing_path| {
+            existing_path.weight += 1;
+        }).or_insert(path);
     }
+
+    let mut game_tree_paths = path_map.into_iter().map(|(_, path)| path).collect::<Vec<_>>();
+
+    println!("Game tree paths after reduction: {}", game_tree_paths.len());
+
+    // Sort the opponenet game paths according to the abstraction to increase the likelihood of cache hits
+    game_tree_paths.sort_by(|a, b| {
+        a.strategy_hub_key.cmp(&b.strategy_hub_key)
+            .then_with(|| a.abstraction.get_abstraction(2, 0, 0, &Player::Opponent)
+            .cmp(&b.abstraction.get_abstraction(2, 0, 0, &Player::Opponent)))
+    });
 
     let mut cbv_solver = CbvSolver{
         traverser_strategy: traverser_strategy_branch,
         opponent_strategy_map,
         game_state,
-        evaluations: all_evaluations,
-        game_abstractions: all_game_abstractions,
-        strategy_hub_keys: opponent_strategy_hub_keys,
+
+        game_tree_paths,
 
         trav_seen: Cell::new(0),
         opp_seen: Cell::new(0),
@@ -189,9 +222,8 @@ struct CbvSolver<'a> {
     traverser_strategy: StrategyBranch<PlayStrategy>,
     opponent_strategy_map: DashMap<StrategyHubKey, StrategyBranch<PlayStrategy>>,
     game_state: &'a mut GameStateHelper,
-    evaluations: Vec<Option<Player>>,
-    game_abstractions: Vec<GameAbstraction>,
-    strategy_hub_keys: Vec<StrategyHubKey>,
+
+    game_tree_paths: Vec<GameTreePath>,
 
     trav_seen: Cell<u32>,
     opp_seen: Cell<u32>,
@@ -203,10 +235,9 @@ impl<'a> CbvSolver<'a> {
     pub fn calculate_cbv(&mut self, action_history: &Vec<Action>) -> f64 { // TODO - move Vec<Action> to the struct
         let initial_reaches = self.calculate_initial_reaches(action_history);
         println!("reaches sum {}", initial_reaches.iter().sum::<f64>());
-        // return 0.0;
-        // let initial_reaches = vec![1.0; self.game_abstractions.len()];
+
         let traverser_utility = self.traverse_action(&initial_reaches); // need to weight by reaches
-        let res = traverser_utility.iter().sum::<f64>() / initial_reaches.iter().sum::<f64>();
+        let res = traverser_utility.iter().zip(initial_reaches.iter()).map(|(u, r)| u * r).sum::<f64>() / initial_reaches.iter().sum::<f64>();
         println!("Utility: {}", res);
         println!("Trav seen: {}, Trav not seen: {}", self.trav_seen.get(), self.trav_not_seen.get());
         println!("Opp seen: {}, Opp not seen: {}", self.opp_seen.get(), self.opp_not_seen.get());
@@ -214,7 +245,10 @@ impl<'a> CbvSolver<'a> {
     }
 
     fn calculate_initial_reaches(&self, action_history: &Vec<Action>) -> Vec<f64> {
-        let mut reaches = vec![1.0; self.game_abstractions.len()];
+        let mut reaches = vec![1.0; self.game_tree_paths.len()];
+        for (index, weight) in self.game_tree_paths.iter().map(|path| path.weight).enumerate() {
+            reaches[index] *= weight as f64;
+        }
         let game_state = GameStateHelper::new(self.game_state.cards, self.game_state.small_blind_player);
         game_state.cards_dealt.set(0);
 
@@ -233,14 +267,14 @@ impl<'a> CbvSolver<'a> {
                         Player::Traverser => {
                             let strategy = self.get_traverser_strategy(0, round, current_player_pot, bets_this_round, num_available_actions);
                             reaches.iter_mut().skip_while(|reach| **reach == 0.0).for_each(|reach| {
-                                let action_probability = strategy.0[2.max(num_available_actions-1)];
+                                let action_probability = strategy.0[2.min(num_available_actions-1)];
                                 *reach *= action_probability;
                             });
                         },
                         Player::Opponent => {
                             reaches.iter_mut().skip_while(|reach| **reach == 0.0).enumerate().for_each(|(deal_index, reach)| {
                                 let strategy = self.get_opponent_strategy(deal_index, round, current_player_pot, bets_this_round, num_available_actions);
-                                let action_probability = strategy.0[2.max(num_available_actions-1)];
+                                let action_probability = strategy.0[2.min(num_available_actions-1)];
                                 *reach *= action_probability;
                             });
                         }
@@ -296,7 +330,7 @@ impl<'a> CbvSolver<'a> {
     }
 
     pub fn evaluate_showdown(&self, deal_index: usize, traverser_pot: f64, opponent_pot: f64) -> f64 {
-        let winner = self.evaluations[deal_index];
+        let winner = self.game_tree_paths[deal_index].evaluation;
         match winner {
             Some(Player::Traverser) => opponent_pot,
             Some(Player::Opponent) => -traverser_pot,
@@ -329,7 +363,7 @@ impl<'a> CbvSolver<'a> {
             TerminalState::Showdown => {
                 let mut cbv_return = reaches.clone();
                 cbv_return.iter_mut().skip_while(|reach| **reach == 0.0).enumerate().for_each(|(deal_index, reach)| {
-                    println!("reach: {}", reach);
+                    // println!("reach: {}", reach);
                     let showdown_utility = self.evaluate_showdown(deal_index, traverser_pot, opponent_pot);
                     *reach *= showdown_utility;
                 });
@@ -339,7 +373,7 @@ impl<'a> CbvSolver<'a> {
                 // Don't need to iterate over the game abstractions here because:
                 // (n*A + n*B + n*C) / (A + B + C) = n
                 // Where n is the (constant for this node) fold utility for this infoset and A, B, C are the reaches
-                return vec![self.evaluate_fold(&current_player, traverser_pot, opponent_pot); self.game_abstractions.len()];
+                return vec![self.evaluate_fold(&current_player, traverser_pot, opponent_pot); self.game_tree_paths.len()];
             }
             TerminalState::RoundOver => {
                 if self.game_state.is_preflop() {
@@ -363,19 +397,28 @@ impl<'a> CbvSolver<'a> {
     }
 
     fn action_value(&mut self, reaches: &Vec<f64>, num_available_actions: usize, current_player: Player, round: usize, bets_this_round: u8, pot_before_action: u8, bets_before_action: u8, previous_player: Player, checks_before: u8) -> CbvReturn {
-        let mut reaches_for_actions = vec![vec![0.0; self.game_abstractions.len()]; num_available_actions];
-        let mut action_probabilities = vec![[0f64; DEFAULT_ACTION_COUNT]; self.game_abstractions.len()];
+        let mut reaches_for_actions = vec![vec![0.0; self.game_tree_paths.len()]; num_available_actions];
+        let mut action_probabilities = vec![[0f64; DEFAULT_ACTION_COUNT]; self.game_tree_paths.len()];
         
-        // TODO - Not sure if its right to calculate the reaches the same for opponent and traverser here
-        let (first_strategy, mut serialised_abstraction) = match current_player {
-            Player::Traverser => self.get_traverser_strategy(0, round, pot_before_action, bets_this_round, num_available_actions),
-            Player::Opponent => self.get_opponent_strategy(0, round, pot_before_action, bets_this_round, num_available_actions),
-        };
+        // let (first_strategy, mut serialised_abstraction) = match current_player {
+        //     Player::Traverser => self.get_traverser_strategy(0, round, pot_before_action, bets_this_round, num_available_actions),
+        //     Player::Opponent => self.get_opponent_strategy(0, round, pot_before_action, bets_this_round, num_available_actions),
+        // };
+        // let mut previous_strategy_key = &StrategyHubKey::default();
         for (deal_index, reach) in reaches.iter().skip_while(|reach| **reach == 0.0).enumerate() {
+            // let strategy = match current_player {
+            //     Player::Traverser => self.get_traverser_strategy_cache(deal_index, round, num_available_actions, &mut serialised_abstraction, first_strategy),
+            //     Player::Opponent => {
+            //         previous_strategy_key = &self.game_tree_paths[deal_index].strategy_hub_key;
+            //         self.get_opponent_strategy_cache(deal_index, round, num_available_actions, previous_strategy_key, &mut serialised_abstraction, first_strategy)
+            //     }
+            // };
+
             let strategy = match current_player {
-                Player::Traverser => self.get_traverser_strategy_cache(deal_index, round, num_available_actions, &mut serialised_abstraction, first_strategy),
-                Player::Opponent => self.get_opponent_strategy_cache(deal_index, round, num_available_actions, &mut serialised_abstraction, first_strategy),
-            };
+                Player::Traverser => self.get_traverser_strategy(0, round, pot_before_action, bets_this_round, num_available_actions),
+                Player::Opponent => self.get_opponent_strategy(0, round, pot_before_action, bets_this_round, num_available_actions),
+            }.0;
+
             for action in 0..num_available_actions {
                 // store the reaches for each action
                 reaches_for_actions[action][deal_index] = reach * strategy[action];
@@ -383,24 +426,23 @@ impl<'a> CbvSolver<'a> {
             action_probabilities[deal_index] = strategy;
         }
         
-        let mut action_abstraction_utilities = vec![Vec::with_capacity(self.game_abstractions.len()); num_available_actions]; // TODO - Should use option
+        let mut action_abstraction_utilities = vec![Vec::with_capacity(self.game_tree_paths.len()); num_available_actions]; // TODO - Should use option
         for action in 0..num_available_actions {
             let next_reaches = &reaches_for_actions[action];
-            println!("Playing action {}/{}, player {}, round {}, pot {}, bets {}, checks {}", action, num_available_actions, current_player, round, pot_before_action, bets_before_action, checks_before);
-
+            // println!("Playing action {}/{}, player {}, round {}, pot {}, bets {}, checks {}", action, num_available_actions, current_player, round, pot_before_action, bets_before_action, checks_before);
             action_abstraction_utilities[action] = self.traverse_chosen_action(next_reaches, action, previous_player, pot_before_action, bets_before_action, checks_before);
         }
 
         if self.game_state.current_player.get() == Player::Traverser {
             let mut max_utility = f64::NEG_INFINITY;
-            let mut best_action_utilities = vec![0.0; self.game_abstractions.len()];
+            let mut best_action_utilities = vec![0.0; self.game_tree_paths.len()];
             let mut best_action_count = 0;
 
             for action in 0..num_available_actions {
                 let mut reach_utility = 0.0;
                 let mut total_reach = 0.0;
                 let abstraction_utilities = &action_abstraction_utilities[action];
-                for deal_index in 0..self.game_abstractions.len() {
+                for deal_index in 0..self.game_tree_paths.len() {
                     let utility = abstraction_utilities[deal_index];
                     let reach = reaches[deal_index];
                     reach_utility += reach * utility;
@@ -412,7 +454,7 @@ impl<'a> CbvSolver<'a> {
                     best_action_utilities = abstraction_utilities.clone();
                     best_action_count = 1;
                 } else if action_utility == max_utility {
-                    for deal_index in 0..self.game_abstractions.len() {
+                    for deal_index in 0..self.game_tree_paths.len() {
                         best_action_utilities[deal_index] += abstraction_utilities[deal_index];
                     }
                     best_action_count += 1;
@@ -420,16 +462,16 @@ impl<'a> CbvSolver<'a> {
             }
 
             if best_action_count > 1 {
-                for deal_index in 0..self.game_abstractions.len() {
+                for deal_index in 0..self.game_tree_paths.len() {
                     best_action_utilities[deal_index] /= best_action_count as f64;
                 }
             }
             return best_action_utilities;
         } else {
-            let mut action_utilities = vec![0.0; self.game_abstractions.len()];
+            let mut action_utilities = vec![0.0; self.game_tree_paths.len()];
             for action in 0..num_available_actions {
                 let abstraction_utilities = &action_abstraction_utilities[action];
-                for deal_index in 0..self.game_abstractions.len() {
+                for deal_index in 0..self.game_tree_paths.len() {
                     action_utilities[deal_index] += abstraction_utilities[deal_index] * action_probabilities[deal_index][action];
                 }
             }
@@ -481,7 +523,7 @@ impl<'a> CbvSolver<'a> {
     }
 
     fn get_opponent_strategy(&self, deal_index: usize, round: usize, current_player_pot: u8, bets_this_round: u8, num_available_actions: usize) -> ([f64; DEFAULT_ACTION_COUNT], GameAbstractionSerialised) {
-        let game_abstraction = &self.game_abstractions[deal_index];
+        let game_abstraction = &self.game_tree_paths[deal_index].abstraction;
         // TODO - massively inefficient to regenerate this every time
         let serialised_abstraction = game_abstraction.get_abstraction(
             round,
@@ -490,7 +532,7 @@ impl<'a> CbvSolver<'a> {
             &Player::Opponent, 
         );
 
-        let strategy_hub_key = &self.strategy_hub_keys[deal_index];
+        let strategy_hub_key = &self.game_tree_paths[deal_index].strategy_hub_key;
         
         let strategy= self.opponent_strategy_map
             .get(&strategy_hub_key)
@@ -503,8 +545,8 @@ impl<'a> CbvSolver<'a> {
         (strategy, serialised_abstraction)
     }
 
-    fn get_opponent_strategy_cache(&self, deal_index: usize, round: usize, num_available_actions: usize, previous_game_abstraction_ser: &mut GameAbstractionSerialised, previous_strategy: [f64; DEFAULT_ACTION_COUNT]) -> [f64; DEFAULT_ACTION_COUNT] {
-        let game_abstraction = &self.game_abstractions[deal_index];
+    fn get_opponent_strategy_cache(&self, deal_index: usize, round: usize, num_available_actions: usize, previous_strategy_key: &StrategyHubKey, previous_game_abstraction_ser: &mut GameAbstractionSerialised, previous_strategy: [f64; DEFAULT_ACTION_COUNT]) -> [f64; DEFAULT_ACTION_COUNT] {
+        let game_abstraction = &self.game_tree_paths[deal_index].abstraction;
         // TODO - massively inefficient to regenerate this every time
         let identical = game_abstraction.replace_round_abstraction(
             previous_game_abstraction_ser,
@@ -512,11 +554,11 @@ impl<'a> CbvSolver<'a> {
             &Player::Opponent, 
         );
 
-        if identical {
+        if identical && previous_strategy_key == &self.game_tree_paths[deal_index].strategy_hub_key {
             return previous_strategy;
         }
 
-        let strategy_hub_key = &self.strategy_hub_keys[deal_index];
+        let strategy_hub_key = &self.game_tree_paths[deal_index].strategy_hub_key;
         
         let strategy= self.opponent_strategy_map
             .get(&strategy_hub_key)
@@ -530,7 +572,7 @@ impl<'a> CbvSolver<'a> {
     }
 
     fn get_traverser_strategy(&self, deal_index: usize, round: usize, current_player_pot: u8, bets_this_round: u8, num_available_actions: usize) -> ([f64; DEFAULT_ACTION_COUNT], GameAbstractionSerialised) {
-        let game_abstraction = &self.game_abstractions[deal_index];
+        let game_abstraction = &self.game_tree_paths[deal_index].abstraction;
         let serialised_abstraction = game_abstraction.get_abstraction(
             round,
             current_player_pot,
@@ -549,7 +591,7 @@ impl<'a> CbvSolver<'a> {
     }
 
     fn get_traverser_strategy_cache(&self, deal_index: usize, round: usize, num_available_actions: usize, previous_game_abstraction_ser: &mut GameAbstractionSerialised, previous_strategy: [f64; DEFAULT_ACTION_COUNT]) -> [f64; DEFAULT_ACTION_COUNT] {
-        let game_abstraction = &self.game_abstractions[deal_index];
+        let game_abstraction = &self.game_tree_paths[deal_index].abstraction;
         let identical = game_abstraction.replace_round_abstraction(
             previous_game_abstraction_ser,
             round,
@@ -569,31 +611,6 @@ impl<'a> CbvSolver<'a> {
         }
     }
 }
-
-// Returns a list of action_histories where the opponent has just acted so we can calculate any gifts
-fn create_action_histories_which_can_gift_us(actions: &[Action], looking_for_sb: bool) -> Vec<Vec<Action>> {
-    let mut action_states = vec![];
-    let mut current_state = vec![];
-    let mut is_sb = true;
-    for action in actions {
-        current_state.push(action.clone());
-
-        // If the opponent has just acted, add the current state to the list of states we will track
-        if is_sb == looking_for_sb {
-            action_states.push(current_state.clone());
-        }
-        match action {
-            Action::Deal(_) => {
-                is_sb = false;
-            },
-            _ => {
-                is_sb = !is_sb;
-            }
-        }
-    }
-    action_states
-}
-
 
 fn convert_actions_to_game_state(actions: &[Action], sb_player: Player) -> GameStateHelper {
     let game_state_from_actions = actions_to_state(actions, sb_player);
@@ -699,4 +716,28 @@ fn calculate_combinations(hand: &[Card]) -> usize {
         }
         _ => 0, // Invalid hand size
     }
+}
+
+// Returns a list of action_histories where the opponent has just acted so we can calculate any gifts
+fn create_action_histories_which_can_gift_us(actions: &[Action], looking_for_sb: bool) -> Vec<Vec<Action>> {
+    let mut action_states = vec![];
+    let mut current_state = vec![];
+    let mut is_sb = true;
+    for action in actions {
+        current_state.push(action.clone());
+
+        // If the opponent has just acted, add the current state to the list of states we will track
+        if is_sb == looking_for_sb {
+            action_states.push(current_state.clone());
+        }
+        match action {
+            Action::Deal(_) => {
+                is_sb = false;
+            },
+            _ => {
+                is_sb = !is_sb;
+            }
+        }
+    }
+    action_states
 }

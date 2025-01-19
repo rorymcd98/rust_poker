@@ -39,8 +39,8 @@ pub fn to_string_game_abstraction(hole1: Rank, hole2: Rank, suited: bool, is_sb:
 
 #[derive(Default, Clone)]
 pub struct GameAbstraction {
-    traverser_round_abstractions: [CardRoundAbstractionSerialised; 4],
-    opponent_round_abstractions: [CardRoundAbstractionSerialised; 4],
+    pub traverser_round_abstractions: [CardRoundAbstractionSerialised; 4],
+    pub opponent_round_abstractions: [CardRoundAbstractionSerialised; 4],
 }
 
 impl GameAbstraction {

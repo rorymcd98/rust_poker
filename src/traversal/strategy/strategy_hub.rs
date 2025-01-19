@@ -313,8 +313,8 @@ pub fn deserialise_strategy_hub<TStrategy: Strategy + Debug + Send + Sync + 'sta
                 }
             )?;
 
-            println!("Deserialising strategy hub element {}", strategy_hub_element_key);
-
+            // println!("Deserialising strategy hub element {}", strategy_hub_element_key);
+            
             let map = deserialised.into_iter().map(|(k, v)| {
                 let infoset_key = base64::engine::general_purpose::STANDARD.decode(&k).map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "Invalid base64 key"))?;
                 let mut array = [0.0; DEFAULT_ACTION_COUNT];

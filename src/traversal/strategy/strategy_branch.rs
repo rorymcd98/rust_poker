@@ -4,7 +4,7 @@ use crate::{models::card::Rank, traversal::action_history::game_abstraction::{to
 
 use super::strategy_trait::Strategy;
 
-#[derive(PartialEq, Eq, Hash, Default, Clone, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Default, Clone, Debug)]
 pub struct StrategyHubKey {
     pub low_rank: Rank,
     pub high_rank: Rank,
