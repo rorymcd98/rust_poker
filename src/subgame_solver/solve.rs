@@ -4,17 +4,19 @@ use std::hash::{Hash, Hasher};
 use std::vec;
 
 use dashmap::DashMap;
+use indicatif::{ParallelProgressIterator, ProgressBar, ProgressIterator, ProgressStyle};
 use itertools::Itertools;
 use rand::seq::SliceRandom;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use rust_poker::config::{BIG_BLIND, BLUEPRINT_FOLDER};
 
 use crate::evaluate::evaluate_hand::HandEvaluator;
-use crate::models::card::{NineCardDeal, Rank};
+use crate::models::card::{self, NineCardDeal, Rank};
 use crate::models::{Card, Player, Suit};
 use crate::thread_utils::with_rng;
 use crate::traversal::action_history::action::{self, Action, DEFAULT_ACTION_COUNT};
 use crate::traversal::action_history::card_round_abstraction::CardRoundAbstractionSerialised;
-use crate::traversal::action_history::game_abstraction::{self, convert_deal_into_abstraction, to_string_game_abstraction, GameAbstraction, GameAbstractionSerialised};
+use crate::traversal::action_history::game_abstraction::{self, convert_deal_into_abstraction, get_current_abstraction, to_string_game_abstraction, GameAbstraction, GameAbstractionSerialised};
 use crate::traversal::game_state::game_state_helper::{GameStateHelper, EVALUATOR};
 use crate::traversal::game_state::terminal_state::TerminalState;
 use crate::traversal::main_train::{get_all_combos_by_blind, get_unique_cards};
@@ -49,6 +51,54 @@ impl GameTreePath {
     }
 }
 
+
+#[derive(Clone)]
+struct PublicGameTreePath {
+    pub evaluations: HashMap<(Card, Card), Option<Player>>,
+    pub deal_cards: [Card; 5], // TODO - Isomorphism
+    // pub weight: usize,
+}
+
+// enum GameTreeNodeType {
+//     Terminal,
+//     Action,
+//     Deal,
+// }
+
+// struct GameTreeNode {
+//     pub children: HashMap<Card, GameTreeNode>,
+//     pub node_type: GameTreeNodeType,
+//     pub hand_reaches: Vec<f64>,
+//     pub utility: Option<(Vec<f64>, Vec<f64>)>,
+    
+// }
+
+// impl GameTreeNode {
+//     pub fn get_utility(&self) -> (Vec<f64>, Vec<f64>) {
+//         match self.node_type {
+//             GameTreeNodeType::Terminal => self.get_utility_terminal(),
+//             GameTreeNodeType::Action => self.get_utility_action(),
+//             GameTreeNodeType::Deal => self.get_utility_deal(),
+//         }
+        
+//     }
+
+//     pub fn get_utility_terminal(mut self) -> (Vec<f64>, Vec<f64>) {
+//         match self.utility {
+//             Some(utility) => utility.clone(),
+//             None => {
+//                 let utility = self.children.iter().map(|(card, node)| {
+//                     let (trav_utility, opp_utility) = node.get_utility_terminal();
+//                     (trav_utility.iter().sum::<f64>(), opp_utility.iter().sum::<f64>())
+//                 }).unzip();
+//                 self.utility = Some(utility.clone());
+//                 utility.clone()
+//             }
+//         }
+//     } 
+// }
+
+
 struct GameStateFromActions {
     partial_deal: NineCardDeal,
     traverser_pot: u8,
@@ -69,11 +119,499 @@ struct GameStateFromActions {
 // 1. Calculate the CBV which can be done using vanilla CFR, multiplying the strategy by the utility for each action
 // 2. Calculate the gift by finding the max of CBV(I) - CBV(I, a) for all a in A(I)
 
+pub fn solve_cbr_utilties2() {
+    let strategy_hub = deserialise_strategy_hub::<PlayStrategy>(BLUEPRINT_FOLDER).unwrap();
+    let strategy_map = strategy_hub.into_iter().collect::<DashMap<StrategyHubKey, StrategyBranch<_>>>();
+
+    // let player_hand = [Card::new(Suit::Spades, Rank::King), Card::new(Suit::Clubs, Rank::King)];
+
+
+    // let traverser_key = StrategyHubKey {
+    //     low_rank: player_hand[0].rank,
+    //     high_rank: player_hand[1].rank,
+    //     is_suited: player_hand[0].suit == player_hand[1].suit,
+    //     is_sb: true,
+    // };
+
+    // let traverser_strategy_branch = opponent_strategy_map.remove(&traverser_key).unwrap().1;
+
+    // Look for the gifts give on the Bet node
+    let action_history = &vec![
+        Action::Bet,  Action::Bet, Action::Bet,Action::Bet, Action::Call,
+        Action::Deal(Card::new(Suit::Clubs, Rank::Three)), Action::Deal(Card::new(Suit::Spades, Rank::Nine)), Action::Deal(Card::new(Suit::Hearts, Rank::Queen)),
+        Action::CheckFold, //Action::Bet, Action::Call, 
+        // Action::Deal(Card::new(Suit::Diamonds, Rank::Five)),
+        // Action::CheckFold, Action::Bet, Action::Call, 
+        // Action::Deal(Card::new(Suit::Clubs, Rank::Six)),
+        // Action::Bet, Action::Bet, Action::Bet//, Action::Bet, Action::Call
+    ];
+
+    let sb_player = Player::Traverser;
+    let game_state = &mut convert_actions_to_game_state(&action_history, sb_player);
+
+    let mut tree_builder = CbvSubTree {
+        strategy_map: &strategy_map,
+        action_history: action_history.clone(),
+        game_state: game_state.clone(),
+        sub_trees: HashMap::new(),
+        dealt_board_cards: Vec::new(),
+        reaches: HoleCardReaches::new(&Vec::new(),&Vec::new()),
+        solving: false,
+    };
+
+    tree_builder.build_all_subtrees();
+}
+
+
+
+type Cbv2Return = Vec<f64>; // Utilitiy for each traverser hole card
+
+#[derive(Clone)]
+struct HoleCardReaches {
+    traverser_reaches: HashMap<(Card, Card), f64>,
+    opponent_reaches: HashMap<(Card, Card), f64>,
+}
+
+impl HoleCardReaches {
+    pub fn new(traverser_hole_cards: &Vec<(Card, Card)>, opponent_hole_cards: &Vec<(Card, Card)>) -> Self {
+        let mut traverser_reaches = HashMap::new();
+        let mut opponent_reaches = HashMap::new();
+        for card in traverser_hole_cards {
+            traverser_reaches.insert(*card, 1.0);
+        }
+        for card in opponent_hole_cards {
+            opponent_reaches.insert(*card, 1.0);
+        }
+        Self {
+            traverser_reaches,
+            opponent_reaches,
+        }
+    }
+
+    pub fn get_reach(&self, player: Player, card: &(Card, Card)) -> f64 {
+        match player {
+            Player::Traverser => *self.traverser_reaches.get(card).unwrap_or(&0.0),
+            Player::Opponent => *self.opponent_reaches.get(card).unwrap_or(&0.0),
+        }
+    }
+
+    pub fn update(&mut self, player: Player, hole_cards: &(Card, Card), reach_multiplier: f64) {
+        match player {
+            Player::Traverser => {
+                self.traverser_reaches.entry(*hole_cards).and_modify(|e| *e *= reach_multiplier);
+            },
+            Player::Opponent => {
+                self.opponent_reaches.entry(*hole_cards).and_modify(|e| *e *= reach_multiplier);
+            }
+        }
+    }
+
+    pub fn get_hole_cards(&self, player: Player) -> Vec<&(Card, Card)> {
+        match player {
+            Player::Traverser => self.traverser_reaches.keys().collect(),
+            Player::Opponent => self.opponent_reaches.keys().collect()
+        }
+    }
+
+    pub fn clone_non_zero(&self) -> Self {
+        let traverser_reaches = self.traverser_reaches.iter().filter(|(_, reach)| **reach != 0.0).map(|(card, reach)| (*card, *reach)).collect();
+        let opponent_reaches = self.opponent_reaches.iter().filter(|(_, reach)| **reach != 0.0).map(|(card, reach)| (*card, *reach)).collect();
+        Self {
+            traverser_reaches,
+            opponent_reaches,
+        }
+    }
+
+    pub fn clone_without_card(&self, card: &Card) -> Self {
+        let traverser_reaches = self.traverser_reaches.iter().filter(|(hole_cards, _)| hole_cards.0 != *card && hole_cards.1 != *card).map(|(card, reach)| (*card, *reach)).collect();
+        let opponent_reaches = self.opponent_reaches.iter().filter(|(hole_cards, _)| hole_cards.0 != *card && hole_cards.1 != *card).map(|(card, reach)| (*card, *reach)).collect();
+        Self {
+            traverser_reaches,
+            opponent_reaches,
+        }
+    }
+}
+
+struct HoleCardPayoffs {
+    pub traverser_payoffs: HashMap<(Card, Card), f64>,
+}
+
+impl HoleCardPayoffs {
+    pub fn add_subpayoff(&mut self, hole_card_subpayoffs: &HoleCardPayoffs) {
+        for (hole_card, payoff) in hole_card_subpayoffs.traverser_payoffs.iter() {
+            self.traverser_payoffs.entry(*hole_card).and_modify(|e| *e += *payoff).or_insert(*payoff);
+        }
+    }
+
+    pub fn max_subpayoff(&mut self, hole_card_subpayoffs: &HoleCardPayoffs) {
+        for (hole_card, payoff) in hole_card_subpayoffs.traverser_payoffs.iter() {
+            self.traverser_payoffs.entry(*hole_card).and_modify(|e| *e = e.max(*payoff)).or_insert(*payoff);
+        }
+    }
+
+    pub fn fold_payoffs(fold_utility: f64, hole_card_reaches: &HoleCardReaches) -> HoleCardPayoffs{
+        let mut payoffs = HoleCardPayoffs::default();
+        for (hole_card, reach) in hole_card_reaches.traverser_reaches.iter() {
+            payoffs.traverser_payoffs.insert(*hole_card, fold_utility * *reach);
+        }
+        payoffs
+    }
+
+    // TODO - Use sorting to make this more efficient
+    pub fn showdown_payoffs(player_pot: usize, traverser_hand_rankings: HashMap<(Card, Card), usize>, opponent_hand_rankings: HashMap<(Card, Card), usize>, hole_card_reaches: &HoleCardReaches) -> HoleCardPayoffs {
+        let mut payoffs = HoleCardPayoffs::default();
+        for (hole_card, reach) in hole_card_reaches.traverser_reaches.iter() {
+            let traverser_rank = traverser_hand_rankings.get(hole_card).unwrap();
+            let opponent_rank = opponent_hand_rankings.get(hole_card).unwrap();
+            let utility = match traverser_rank.cmp(opponent_rank) {
+                std::cmp::Ordering::Less => -player_pot as f64,
+                std::cmp::Ordering::Equal => 0.0,
+                std::cmp::Ordering::Greater => player_pot as f64,
+            };
+            payoffs.traverser_payoffs.insert(*hole_card, utility * *reach);
+        }
+        payoffs
+    }
+
+    // def ev_terminal_node(self, root, reachprobs):
+    //     payoffs = [None for _ in range(self.rules.players)]
+    //     for player in range(self.rules.players):
+    //         player_payoffs = {hc: 0 for hc in root.holecards[player]}
+    //         counts = {hc: 0 for hc in root.holecards[player]}
+    //         for hands,winnings in root.payoffs.items():
+    //             prob = 1.0
+    //             player_hc = None
+    //             for opp,hc in enumerate(hands):
+    //                 if opp == player:
+    //                     player_hc = hc
+    //                 else:
+    //                     prob *= reachprobs[opp][hc]
+    //             player_payoffs[player_hc] += prob * winnings[player]
+    //             counts[player_hc] += 1
+    //         for hc,count in counts.items():
+    //             if count > 0:
+    //                 player_payoffs[hc] /= float(count)
+    //         payoffs[player] = player_payoffs
+    //     return payoffs
+}
+
+impl Default for HoleCardPayoffs {
+    fn default() -> Self {
+        Self {
+            traverser_payoffs: HashMap::new(),
+        }
+    }
+}
+
+
+type CbvSubeTreeReturn = HashMap<(Card, Card), f64>;
+
+struct CbvSubTree<'a> {
+    strategy_map: &'a DashMap<StrategyHubKey, StrategyBranch<PlayStrategy>>,
+    action_history: Vec<Action>,
+    game_state: GameStateHelper,
+    sub_trees: HashMap<Vec<Action>, CbvSubTree<'a>>,
+    dealt_board_cards: Vec<Card>,
+    reaches: HoleCardReaches, // can possibly remove this and just store it in sub_trees
+    solving: bool,
+}
+
+impl<'a> CbvSubTree<'a> {
+    pub fn build_all_subtrees(&mut self, ) -> HashMap<(Card, Card), f64> { // TODO - move Vec<Action> to the struct
+        let dealt_board_cards = self.action_history.iter().filter_map(|action| {
+            if let Action::Deal(card) = action {
+                Some(*card)
+            } else {
+                None
+            }
+        }).collect::<Vec<_>>();
+
+        let remaining_cards = (0..52).map(|card_int| Card::from_int(card_int)).filter(|card| !dealt_board_cards.contains(card)).collect::<Vec<_>>();
+        
+        let all_hole_cards = remaining_cards.iter().combinations(2).map(|cards| {
+            (*cards[0], *cards[1])
+        }).collect::<Vec<_>>();
+        
+        let action_history = self.action_history.clone();
+        let initial_reaches = self.calculate_initial_reaches(&action_history, &all_hole_cards.clone(), &all_hole_cards.clone());
+        self.dealt_board_cards = dealt_board_cards;
+
+        // for card in initial_reaches.get_hole_cards(Player::Traverser) {
+        //     let reach = initial_reaches.get_reach(Player::Traverser, card);
+        //     println!("Traverser reach: {:?} {}", card, reach);
+        // }
+
+        self.explore_sub_trees(&initial_reaches, 7); // need to weight by reaches
+
+        // Do an operation here to get the CBV for the root node
+
+        for (action_history, subtree) in self.sub_trees.iter() {
+            println!("{:?}", action_history);
+        }
+        println!("Subtrees {}", self.sub_trees.len());
+
+        for (action, subtree) in self.sub_trees.iter_mut().take(1){
+            let res = subtree.explore_sub_trees(&subtree.reaches.clone_non_zero(), 100000);
+        }
+        return HashMap::new();
+    }
+
+    fn calculate_initial_reaches(&mut self, action_history: &Vec<Action>, traverser_cards: &Vec<(Card, Card)>, opponent_cards: &Vec<(Card, Card)>) -> HoleCardReaches {
+        let game_state = GameStateHelper::new(self.game_state.cards, self.game_state.small_blind_player);
+        let mut reaches = HoleCardReaches::new(traverser_cards, opponent_cards);
+        self.dealt_board_cards = Vec::new();
+
+        for action in action_history {
+            let round = (game_state.cards_dealt.get()).saturating_sub(2) as usize;
+            let current_player_pot = game_state.get_current_player_pot();
+            let bets_this_round = game_state.bets_this_round.get();
+            let num_available_actions = game_state.get_num_available_actions();
+            let current_player = game_state.current_player.get();
+
+
+            let all_hole_cards = match current_player {
+                Player::Traverser => traverser_cards,
+                Player::Opponent => opponent_cards,
+            };
+
+            match action {
+                Action::Deal(card) => {
+                    game_state.deal();
+                    self.dealt_board_cards.push(*card);
+                },
+                Action::Bet => {
+                    for hole_cards in all_hole_cards {
+                        let strategy = self.get_strategy(&hole_cards, &current_player, round, current_player_pot, bets_this_round, num_available_actions);
+                        let action_probability = strategy[2.min(num_available_actions-1)];
+                        reaches.update(current_player, hole_cards,action_probability);
+                    } 
+                    game_state.bet();
+                    game_state.switch_current_player();
+                },
+                Action::Call => {
+                    for hole_cards in all_hole_cards {
+                        let strategy = self.get_strategy(&hole_cards, &current_player, round, current_player_pot, bets_this_round, num_available_actions);
+                        let action_probability = strategy[1];
+                        reaches.update(current_player, hole_cards,action_probability);
+                    } 
+                    game_state.call();
+                    game_state.switch_current_player();
+                },
+                Action::CheckFold => {
+                    for hole_cards in all_hole_cards {
+                        let strategy = self.get_strategy(&hole_cards, &current_player, round, current_player_pot, bets_this_round, num_available_actions);
+                        let action_probability = strategy[0];
+                        reaches.update(current_player, hole_cards,action_probability);
+                    } 
+                    game_state.checkfold();
+                    game_state.switch_current_player();
+                },
+                _ => {}
+            }
+        }
+        reaches
+    }
+
+    pub fn create_subtree(&mut self, reaches: &HoleCardReaches) {
+        self.sub_trees.insert( self.action_history.clone(),CbvSubTree{
+            strategy_map: &self.strategy_map,
+            action_history: self.action_history.clone(),
+            reaches: reaches.clone_non_zero(),
+            game_state: self.game_state.clone(),
+            dealt_board_cards: self.dealt_board_cards.clone(),
+            solving: true,
+            // unused
+            sub_trees: HashMap::new(),
+        });
+    }
+
+    fn explore_sub_trees(&mut self, reaches: &HoleCardReaches, depth: usize) -> HoleCardPayoffs {
+        if depth == 0 {
+            self.create_subtree(reaches);
+            return HoleCardPayoffs::default();
+        }        
+        let num_available_actions = self.game_state.get_num_available_actions();
+
+        match self.game_state.check_round_terminal() {
+            TerminalState::None => {
+                let current_player = self.game_state.current_player.get();
+                let round = (self.game_state.cards_dealt.get()).saturating_sub(2) as usize;
+                let bets_this_round = self.game_state.bets_this_round.get();
+                let pot_before_action = self.game_state.get_current_player_pot();
+                let bets_before_action = self.game_state.bets_this_round.get();
+                let previous_player = self.game_state.current_player.get();
+                let checks_before = self.game_state.checks_this_round.get();
+
+                //// Here we're calculating CBV as described in Safe and Nested Subgame Solving for Imperfect-Information Games
+                return self.perform_action(reaches.clone_non_zero(), num_available_actions, current_player, round, bets_this_round, pot_before_action, bets_before_action, previous_player, checks_before, depth-1);
+            },
+            TerminalState::RoundOver => {
+                return self.traverse_deal(reaches, 0);
+            },
+            TerminalState::Fold => {
+                if self.solving {
+                    return self.evaluate_fold(&self.game_state, &reaches);
+                } else {
+                    self.create_subtree(reaches);
+                    return HoleCardPayoffs::default();
+                }
+            },
+            TerminalState::Showdown => {
+                if self.solving {
+
+                } else {
+                    self.create_subtree(reaches);
+                    return HoleCardPayoffs::default();
+                }
+            },
+        };
+    }
+
+    // pub fn evaluate_showdown(&self, deal_index: usize, traverser_pot: f64, opponent_pot: f64) -> f64 {
+    //     let winner = self.game_tree_paths[deal_index].evaluation;
+    //     match winner {
+    //         Some(Player::Traverser) => opponent_pot,
+    //         Some(Player::Opponent) => -traverser_pot,
+    //         None => 0.0,
+    //     }
+    // }
+    
+    pub fn evaluate_fold(&self, current_player: &Player, traverser_pot: f64, opponent_pot: f64) -> HoleCardPayoffs {
+    
+        let utility = match current_player {
+            Player::Traverser => opponent_pot,
+            Player::Opponent => -traverser_pot,
+        };
+        let mut payoffs = HoleCardPayoffs::default();
+    }
+
+    // pub fn evaluate_fold(&self, current_player: &Player, traverser_pot: f64, opponent_pot: f64) -> f64 {
+    //     match current_player {
+    //         Player::Traverser => opponent_pot,
+    //         Player::Opponent => -traverser_pot,
+    //     }
+    // }
+
+    fn perform_action(&mut self, reaches: HoleCardReaches, num_available_actions: usize, current_player: Player, round: usize, bets_this_round: u8, pot_before_action: u8, bets_before_action: u8, previous_player: Player, checks_before: u8, depth: usize) -> HoleCardPayoffs {
+        let all_hole_cards = reaches.get_hole_cards(current_player);
+        let mut next_reaches = vec![reaches.clone(); DEFAULT_ACTION_COUNT];
+        // let mut action_probabilities = vec![[0f64; DEFAULT_ACTION_COUNT]; all_hole_cards.len()]; // TODO - Not sure if we need the strategy here
+
+
+        for hole_cards in all_hole_cards.iter() {
+            let strategy = self.get_strategy(hole_cards, &current_player, round, pot_before_action, bets_this_round, num_available_actions);
+            for action in 0..num_available_actions {
+                // store the reaches for each action
+                next_reaches[action].update(current_player, hole_cards, strategy[action]);
+            }
+            // action_probabilities[index] = strategy;
+        }
+
+        let mut payoffs = HoleCardPayoffs::default();
+
+        for action in 0..num_available_actions {
+            let next_reaches = &next_reaches[action];
+            let subpayoff = self.traverse_chosen_action(&next_reaches.clone_non_zero(),  action, previous_player, pot_before_action, bets_before_action, checks_before, depth);
+            match current_player {
+                Player::Traverser => payoffs.max_subpayoff(&subpayoff),
+                Player::Opponent => payoffs.add_subpayoff(&subpayoff),
+            }
+        }
+        payoffs
+    }
+
+    fn traverse_chosen_action(&mut self, reaches: &HoleCardReaches, action: usize, acting_player: Player, current_pot: u8, current_bets: u8, current_checks: u8, depth: usize) -> HoleCardPayoffs {
+        match action {
+            0 => {
+                self.game_state.checkfold();
+                self.action_history.push(Action::CheckFold);
+            },
+            1 => match self.game_state.call_or_bet() {
+                Action::Call => self.action_history.push(Action::Call),
+                Action::Bet => self.action_history.push(Action::Bet),
+                _ => {}
+            },
+            2 => {
+                self.game_state.bet();
+                self.action_history.push(Action::Bet);
+            },
+            _ => {panic!("Invalid action");}
+        };
+
+        self.game_state.switch_current_player();
+        let subpayoffs = self.explore_sub_trees(reaches, depth);
+        self.game_state.undo(
+            acting_player,
+            current_pot,
+            current_bets,
+            current_checks,
+        );
+        self.action_history.pop();
+        subpayoffs
+    }
+
+    fn traverse_deal(&mut self, reaches: &HoleCardReaches, depth: usize) -> HoleCardPayoffs {
+        let previous_player = self.game_state.current_player.get();
+        let previous_bets = self.game_state.bets_this_round.get();
+        let checks_before = self.game_state.checks_this_round.get();
+
+        let mut payoffs = HoleCardPayoffs::default();
+
+        for card in self.get_potential_next_cards() {
+            self.action_history.push(Action::Deal(card));
+            self.game_state.deal();
+            let subpayoffs = self.explore_sub_trees(&reaches.clone_without_card(&card), depth);
+            payoffs.add_subpayoff(&subpayoffs);
+            self.action_history.pop();
+            self.game_state
+                .undeal(previous_bets, previous_player, checks_before);
+        };
+
+        payoffs
+    }
+
+    fn get_potential_next_cards(&self) -> Vec<Card> {
+        let remaining_cards = (0..52).map(|card_int| Card::from_int(card_int)).filter(|card| !self.dealt_board_cards.contains(card)).collect::<Vec<_>>();
+        remaining_cards
+    }
+
+    fn get_strategy(&self, hole_cards: &(Card, Card), current_player: &Player,  round: usize, current_player_pot: u8, bets_this_round: u8, num_available_actions: usize) -> [f64; DEFAULT_ACTION_COUNT] {
+        let game_abstraction = self.get_abstraction_cache(hole_cards, round, current_player_pot, bets_this_round);
+        let strategy_hub_key = Self::get_strategy_hub_key(hole_cards, &self.game_state.small_blind_player == current_player);
+
+        let strategy= self.strategy_map
+            .get(&strategy_hub_key)
+            .and_then(|strategy_branch| strategy_branch.get_strategy(&game_abstraction).cloned());
+    
+        let strategy = match strategy {
+            Some(strategy) => strategy.get_current_strategy(0),
+            None => [1.0 / (num_available_actions as f64); DEFAULT_ACTION_COUNT],
+        };
+        strategy
+    }
+
+    fn get_abstraction_cache(&self, hole_cards: &(Card, Card), round: usize, game_pot: u8, bets_this_round: u8) -> GameAbstractionSerialised {
+        // TODO - Implement cache
+        get_current_abstraction(hole_cards, &self.dealt_board_cards, round, game_pot, bets_this_round)
+    }
+
+    fn get_strategy_hub_key(hole_cards: &(Card, Card), is_sb: bool) -> StrategyHubKey {
+        StrategyHubKey {
+            low_rank: hole_cards.0.rank,
+            high_rank: hole_cards.1.rank,
+            is_suited: hole_cards.0.suit == hole_cards.1.suit,
+            is_sb,
+        }
+    }
+}
+
+
+
 pub fn solve_cbr_utilties() {
     let strategy_hub = deserialise_strategy_hub::<PlayStrategy>(BLUEPRINT_FOLDER).unwrap();
     let opponent_strategy_map = strategy_hub.into_iter().collect::<DashMap<StrategyHubKey, StrategyBranch<_>>>();
 
-    let player_hand = [Card::new(Suit::Spades, Rank::King), Card::new(Suit::Clubs, Rank::King)];
+    let player_hand = [Card::new(Suit::Spades, Rank::Two), Card::new(Suit::Clubs, Rank::Seven)];
 
 
     let traverser_key = StrategyHubKey {
@@ -248,7 +786,8 @@ struct CbvSolver<'a> {
 
 impl<'a> CbvSolver<'a> {
     pub fn calculate_cbv(&mut self, action_history: &Vec<Action>) -> f64 { // TODO - move Vec<Action> to the struct
-        let initial_reaches = self.calculate_initial_reaches(action_history);
+        // let initial_reaches = self.calculate_initial_reaches(action_history);
+        let initial_reaches = vec![1.0; self.game_tree_paths.len()];
         println!("Initial reaches which are 0: {}", initial_reaches.iter().filter(|reach| **reach == 0.0).count());
         let reaches_sum = initial_reaches.iter().sum::<f64>();
         println!("reaches sum {}", reaches_sum);
@@ -496,9 +1035,9 @@ impl<'a> CbvSolver<'a> {
 
     fn traverse_chosen_action(&mut self, reaches: &Vec<f64>, action: usize, acting_player: Player, current_pot: u8, current_bets: u8, current_checks: u8) -> CbvReturn {
         match action {
-            0 => self.game_state.checkfold(),
-            1 => self.game_state.call_or_bet(),
-            2 => self.game_state.bet(),
+            0 => {self.game_state.checkfold();},
+            1 => {self.game_state.call_or_bet();},
+            2 => {self.game_state.bet();},
             _ => {}
         };
         self.game_state.switch_current_player();

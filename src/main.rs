@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 use itertools::Itertools;
 use models::{card::Rank, Card, Suit};
 use rust_poker::validation::validate_strategies;
-use subgame_solver::solve::solve_cbr_utilties;
+use subgame_solver::solve::{solve_cbr_utilties, solve_cbr_utilties2};
 use traversal::{main_train::begin_tree_train_traversal, strategy::strategy_branch::StrategyHubKey};
 use validation::validate_strategy_map;
 
@@ -20,5 +20,5 @@ mod validation;
 fn main() {
         // begin_tree_train_traversal();
         // validate_strategies();
-        solve_cbr_utilties();
+        solve_cbr_utilties2();
 }

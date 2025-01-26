@@ -199,8 +199,12 @@ impl HandEvaluator for HandEvaluatorLookup {
     }
 
     fn evaluate_deal(&self, deal: &[Card; 9]) -> Option<Player> {
-        let best_score_traverser = self.score_for_indices(&deal, 0);
-        let best_score_opponent = self.score_for_indices(&deal, 2);
+        let board: &[Card; 5] = deal[4..9].try_into().expect("Board is not 5 cards");
+        let traverser_cards: &[Card; 2] = deal[0..2].try_into().expect("Traverser cards are not 2 cards");
+        let opponenet_cards: &[Card; 2] = deal[2..4].try_into().expect("Opponent cards are not 2 cards");
+
+        let best_score_traverser = self.evaluate_seven(traverser_cards, board);
+        let best_score_opponent = self.evaluate_seven(opponenet_cards, board);
 
         match best_score_traverser.cmp(&best_score_opponent) {
             std::cmp::Ordering::Greater => Some(Player::Traverser),
@@ -211,30 +215,29 @@ impl HandEvaluator for HandEvaluatorLookup {
 }
 
 impl HandEvaluatorLookup {
-    fn score_for_indices(&self, deal: &[Card; 9], i1: usize) -> u16 {
+    fn evaluate_seven(&self, &hole_cards: &[Card; 2], board: &[Card; 5]) -> u16{
         let mut max_score = 0;
-        let i2 = i1 + 1;
-        max_score = max_score.max(self.evaluate([deal[i1], deal[i2], deal[4], deal[5], deal[6]]));
-        max_score = max_score.max(self.evaluate([deal[i1], deal[i2], deal[4], deal[5], deal[7]]));
-        max_score = max_score.max(self.evaluate([deal[i1], deal[i2], deal[4], deal[5], deal[8]]));
-        max_score = max_score.max(self.evaluate([deal[i1], deal[i2], deal[4], deal[6], deal[7]]));
-        max_score = max_score.max(self.evaluate([deal[i1], deal[i2], deal[4], deal[6], deal[8]]));
-        max_score = max_score.max(self.evaluate([deal[i1], deal[i2], deal[4], deal[7], deal[8]]));
-        max_score = max_score.max(self.evaluate([deal[i1], deal[i2], deal[5], deal[6], deal[7]]));
-        max_score = max_score.max(self.evaluate([deal[i1], deal[i2], deal[5], deal[6], deal[8]]));
-        max_score = max_score.max(self.evaluate([deal[i1], deal[i2], deal[5], deal[7], deal[8]]));
-        max_score = max_score.max(self.evaluate([deal[i1], deal[i2], deal[6], deal[7], deal[8]]));
-        max_score = max_score.max(self.evaluate([deal[i1], deal[4], deal[5], deal[6], deal[7]]));
-        max_score = max_score.max(self.evaluate([deal[i1], deal[4], deal[5], deal[6], deal[8]]));
-        max_score = max_score.max(self.evaluate([deal[i1], deal[4], deal[5], deal[7], deal[8]]));
-        max_score = max_score.max(self.evaluate([deal[i1], deal[4], deal[6], deal[7], deal[8]]));
-        max_score = max_score.max(self.evaluate([deal[i1], deal[5], deal[6], deal[7], deal[8]]));
-        max_score = max_score.max(self.evaluate([deal[i2], deal[4], deal[5], deal[6], deal[7]]));
-        max_score = max_score.max(self.evaluate([deal[i2], deal[4], deal[5], deal[6], deal[8]]));
-        max_score = max_score.max(self.evaluate([deal[i2], deal[4], deal[5], deal[7], deal[8]]));
-        max_score = max_score.max(self.evaluate([deal[i2], deal[4], deal[6], deal[7], deal[8]]));
-        max_score = max_score.max(self.evaluate([deal[i2], deal[5], deal[6], deal[7], deal[8]]));
-        max_score = max_score.max(self.evaluate([deal[4], deal[5], deal[6], deal[7], deal[8]]));
+        max_score = max_score.max(self.evaluate([hole_cards[0], hole_cards[1], board[0], board[1], board[2]]));
+        max_score = max_score.max(self.evaluate([hole_cards[0], hole_cards[1], board[0], board[1], board[3]]));
+        max_score = max_score.max(self.evaluate([hole_cards[0], hole_cards[1], board[0], board[1], board[4]]));
+        max_score = max_score.max(self.evaluate([hole_cards[0], hole_cards[1], board[0], board[2], board[3]]));
+        max_score = max_score.max(self.evaluate([hole_cards[0], hole_cards[1], board[0], board[2], board[4]]));
+        max_score = max_score.max(self.evaluate([hole_cards[0], hole_cards[1], board[0], board[3], board[4]]));
+        max_score = max_score.max(self.evaluate([hole_cards[0], hole_cards[1], board[1], board[2], board[3]]));
+        max_score = max_score.max(self.evaluate([hole_cards[0], hole_cards[1], board[1], board[2], board[4]]));
+        max_score = max_score.max(self.evaluate([hole_cards[0], hole_cards[1], board[1], board[3], board[4]]));
+        max_score = max_score.max(self.evaluate([hole_cards[0], hole_cards[1], board[2], board[3], board[4]]));
+        max_score = max_score.max(self.evaluate([hole_cards[0], board[0], board[1], board[2], board[3]]));
+        max_score = max_score.max(self.evaluate([hole_cards[0], board[0], board[1], board[2], board[4]]));
+        max_score = max_score.max(self.evaluate([hole_cards[0], board[0], board[1], board[3], board[4]]));
+        max_score = max_score.max(self.evaluate([hole_cards[0], board[0], board[2], board[3], board[4]]));
+        max_score = max_score.max(self.evaluate([hole_cards[0], board[1], board[2], board[3], board[4]]));
+        max_score = max_score.max(self.evaluate([hole_cards[1], board[0], board[1], board[2], board[3]]));
+        max_score = max_score.max(self.evaluate([hole_cards[1], board[0], board[1], board[2], board[4]]));
+        max_score = max_score.max(self.evaluate([hole_cards[1], board[0], board[1], board[3], board[4]]));
+        max_score = max_score.max(self.evaluate([hole_cards[1], board[0], board[2], board[3], board[4]]));
+        max_score = max_score.max(self.evaluate([hole_cards[1], board[1], board[2], board[3], board[4]]));
+        max_score = max_score.max(self.evaluate([board[0], board[1], board[2], board[3], board[4]]));
 
         max_score
     }

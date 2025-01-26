@@ -2,6 +2,7 @@ use lazy_static::lazy_static;
 
 use crate::config::*;
 use crate::evaluate::evaluate_hand::{HandEvaluator, HandEvaluatorLookup};
+use crate::traversal::action_history::action::Action;
 use crate::traversal::action_history::game_abstraction::{GameAbstractionSerialised, convert_deal_into_abstraction};
 use crate::models::card::{cards_string, NineCardDeal};
 use crate::models::Player;
@@ -177,7 +178,7 @@ impl GameStateHelper {
         }
     }
 
-    pub fn bet(&self) {
+    pub fn bet(&self) -> Action {
         self.bets_this_round.set(self.bets_this_round.get() + 1);
         let raise = if self.is_preflop() {
             BIG_BLIND
@@ -191,7 +192,8 @@ impl GameStateHelper {
             Player::Opponent => {
                 self.opponent_pot.set(self.traverser_pot.get() + raise);
             }
-        }
+        };
+        return Action::Bet;
     }
 
     pub fn get_current_player_pot(&self) -> u8 {
@@ -208,7 +210,7 @@ impl GameStateHelper {
         }
     }
 
-    pub fn call_or_bet(&self) {
+    pub fn call_or_bet(&self) -> Action {
         if self.get_current_player_pot() == SMALL_BLIND {
             return self.call();
         }
@@ -218,7 +220,7 @@ impl GameStateHelper {
         }
     }
 
-    pub fn call(&self) {
+    pub fn call(&self) -> Action {
         if self.get_current_player_pot() == 2 {
             self.checkfold(); // Pseudo check
         }
@@ -230,6 +232,7 @@ impl GameStateHelper {
                 self.opponent_pot.set(self.traverser_pot.get());
             }
         };
+        return Action::Call;
     }
 
     pub fn checkfold(&self) {

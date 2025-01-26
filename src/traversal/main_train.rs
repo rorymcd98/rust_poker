@@ -221,9 +221,9 @@ impl<'a> TrainingBranchTraverser<'a> {
 
     fn traverse_chosen_action(&mut self, action: usize, acting_player: Player, current_pot: u8, current_bets: u8, current_checks: u8) -> f64 {
         match action {
-            0 => self.game_state.checkfold(),
-            1 => self.game_state.call_or_bet(),
-            2 => self.game_state.bet(),
+            0 => {self.game_state.checkfold();},
+            1 => {self.game_state.call_or_bet();},
+            2 => {self.game_state.bet();},
             _ => panic!("Invalid action"),
         };
         self.game_state.switch_current_player();

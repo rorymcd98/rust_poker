@@ -8,7 +8,7 @@ use crate::{
     traversal::action_history::card_round_abstraction::CardRoundAbstraction, Card,
 };
 
-use super::card_round_abstraction::CardRoundAbstractionSerialised;
+use super::card_round_abstraction::{self, CardRoundAbstractionSerialised};
 
 pub type GameAbstractionSerialised = Vec<u8>;
 
@@ -67,6 +67,24 @@ impl GameAbstraction {
         serialised.extend(round_abstraction.clone());
         serialised
     }
+    
+    pub fn get_abstraction_from_round(
+        round: usize,
+        game_pot: u8,
+        bets_this_round: u8,
+        round_abstraction: CardRoundAbstractionSerialised,
+    ) -> GameAbstractionSerialised {
+        // TODO - Compress this down
+        // [_] = 8 bits
+        // [round] [game pot] [round bets] [ ... round abstraction ...]
+
+        let mut serialised = vec![];
+        serialised.push(round as u8);
+        serialised.push(game_pot);
+        serialised.push(bets_this_round);
+        serialised.extend(round_abstraction.clone());
+        serialised
+    }
 
     /// Replace the round abstraction for the current player without creating a whole new vec
     pub fn replace_round_abstraction(&self, game_abstraction_serialised: &mut GameAbstractionSerialised, round: usize, current_player: &Player) -> bool {
@@ -102,4 +120,14 @@ pub fn convert_deal_into_abstraction(deal: NineCardDeal) -> GameAbstraction {
         traverser_round_abstractions,
         opponent_round_abstractions,
     }
+}
+
+// TODO - Move into CardRoundAbstraction ? 
+pub fn convert_cards_into_card_abstraction(hole_cards: &(Card, Card), board_cards: &Vec<Card>) -> CardRoundAbstractionSerialised {
+    CardRoundAbstraction::new(&[hole_cards.0, hole_cards.1], &board_cards).serialise()
+}
+
+pub fn get_current_abstraction(hole_cards: &(Card, Card), board_cards: &Vec<Card>, round: usize, game_pot: u8, bets_this_round: u8) -> GameAbstractionSerialised {
+    let card_round_abstraction = convert_cards_into_card_abstraction(hole_cards, board_cards);
+    GameAbstraction::get_abstraction_from_round(round, game_pot, bets_this_round, card_round_abstraction)
 }
