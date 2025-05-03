@@ -145,8 +145,9 @@ impl HandLookup for HandLookupArrays {
 /// 7463 is a Royal Flush
 /// 1 is a High Card 7
 pub trait HandEvaluator {
-    fn evaluate(&self, cards: [Card; 5]) -> u16;
-    fn evaluate_deal(&self, deal: &[Card; 9]) -> Option<Player>;
+    fn evaluate_five(&self, cards: [Card; 5]) -> u16;
+    fn evaluate_seven(&self, hole_cards: &[Card; 2], board_cards: &[Card; 5]) -> u16;
+    fn evaluate_nine(&self, deal: &[Card; 9]) -> Option<Player>;
 }
 
 pub struct HandEvaluatorLookup {
@@ -173,7 +174,7 @@ pub fn hand_to_id(hand: &[Card]) -> [CardId; 5] {
 }
 
 impl HandEvaluator for HandEvaluatorLookup {
-    fn evaluate(&self, cards: [Card; 5]) -> u16 {
+    fn evaluate_five(&self, cards: [Card; 5]) -> u16 {
         let card_ids = hand_to_id(&cards);
         let flush = is_flush(&card_ids);
         let unique_rank_representation = unique_rank_mask(&card_ids);
@@ -198,7 +199,7 @@ impl HandEvaluator for HandEvaluatorLookup {
             .remaining_evaluation(prime_product as usize)
     }
 
-    fn evaluate_deal(&self, deal: &[Card; 9]) -> Option<Player> {
+    fn evaluate_nine(&self, deal: &[Card; 9]) -> Option<Player> {
         let board: &[Card; 5] = deal[4..9].try_into().expect("Board is not 5 cards");
         let traverser_cards: &[Card; 2] = deal[0..2].try_into().expect("Traverser cards are not 2 cards");
         let opponenet_cards: &[Card; 2] = deal[2..4].try_into().expect("Opponent cards are not 2 cards");
@@ -212,33 +213,31 @@ impl HandEvaluator for HandEvaluatorLookup {
             std::cmp::Ordering::Equal => None,
         }
     }
-}
 
-impl HandEvaluatorLookup {
-    fn evaluate_seven(&self, &hole_cards: &[Card; 2], board: &[Card; 5]) -> u16{
+    fn evaluate_seven(&self, &hole_cards: &[Card; 2], board_cards: &[Card; 5]) -> u16{
         let mut max_score = 0;
-        max_score = max_score.max(self.evaluate([hole_cards[0], hole_cards[1], board[0], board[1], board[2]]));
-        max_score = max_score.max(self.evaluate([hole_cards[0], hole_cards[1], board[0], board[1], board[3]]));
-        max_score = max_score.max(self.evaluate([hole_cards[0], hole_cards[1], board[0], board[1], board[4]]));
-        max_score = max_score.max(self.evaluate([hole_cards[0], hole_cards[1], board[0], board[2], board[3]]));
-        max_score = max_score.max(self.evaluate([hole_cards[0], hole_cards[1], board[0], board[2], board[4]]));
-        max_score = max_score.max(self.evaluate([hole_cards[0], hole_cards[1], board[0], board[3], board[4]]));
-        max_score = max_score.max(self.evaluate([hole_cards[0], hole_cards[1], board[1], board[2], board[3]]));
-        max_score = max_score.max(self.evaluate([hole_cards[0], hole_cards[1], board[1], board[2], board[4]]));
-        max_score = max_score.max(self.evaluate([hole_cards[0], hole_cards[1], board[1], board[3], board[4]]));
-        max_score = max_score.max(self.evaluate([hole_cards[0], hole_cards[1], board[2], board[3], board[4]]));
-        max_score = max_score.max(self.evaluate([hole_cards[0], board[0], board[1], board[2], board[3]]));
-        max_score = max_score.max(self.evaluate([hole_cards[0], board[0], board[1], board[2], board[4]]));
-        max_score = max_score.max(self.evaluate([hole_cards[0], board[0], board[1], board[3], board[4]]));
-        max_score = max_score.max(self.evaluate([hole_cards[0], board[0], board[2], board[3], board[4]]));
-        max_score = max_score.max(self.evaluate([hole_cards[0], board[1], board[2], board[3], board[4]]));
-        max_score = max_score.max(self.evaluate([hole_cards[1], board[0], board[1], board[2], board[3]]));
-        max_score = max_score.max(self.evaluate([hole_cards[1], board[0], board[1], board[2], board[4]]));
-        max_score = max_score.max(self.evaluate([hole_cards[1], board[0], board[1], board[3], board[4]]));
-        max_score = max_score.max(self.evaluate([hole_cards[1], board[0], board[2], board[3], board[4]]));
-        max_score = max_score.max(self.evaluate([hole_cards[1], board[1], board[2], board[3], board[4]]));
-        max_score = max_score.max(self.evaluate([board[0], board[1], board[2], board[3], board[4]]));
-
+        max_score = max_score.max(self.evaluate_five([hole_cards[0], hole_cards[1], board_cards[0], board_cards[1], board_cards[2]]));
+        max_score = max_score.max(self.evaluate_five([hole_cards[0], hole_cards[1], board_cards[0], board_cards[1], board_cards[3]]));
+        max_score = max_score.max(self.evaluate_five([hole_cards[0], hole_cards[1], board_cards[0], board_cards[1], board_cards[4]]));
+        max_score = max_score.max(self.evaluate_five([hole_cards[0], hole_cards[1], board_cards[0], board_cards[2], board_cards[3]]));
+        max_score = max_score.max(self.evaluate_five([hole_cards[0], hole_cards[1], board_cards[0], board_cards[2], board_cards[4]]));
+        max_score = max_score.max(self.evaluate_five([hole_cards[0], hole_cards[1], board_cards[0], board_cards[3], board_cards[4]]));
+        max_score = max_score.max(self.evaluate_five([hole_cards[0], hole_cards[1], board_cards[1], board_cards[2], board_cards[3]]));
+        max_score = max_score.max(self.evaluate_five([hole_cards[0], hole_cards[1], board_cards[1], board_cards[2], board_cards[4]]));
+        max_score = max_score.max(self.evaluate_five([hole_cards[0], hole_cards[1], board_cards[1], board_cards[3], board_cards[4]]));
+        max_score = max_score.max(self.evaluate_five([hole_cards[0], hole_cards[1], board_cards[2], board_cards[3], board_cards[4]]));
+        max_score = max_score.max(self.evaluate_five([hole_cards[0], board_cards[0], board_cards[1], board_cards[2], board_cards[3]]));
+        max_score = max_score.max(self.evaluate_five([hole_cards[0], board_cards[0], board_cards[1], board_cards[2], board_cards[4]]));
+        max_score = max_score.max(self.evaluate_five([hole_cards[0], board_cards[0], board_cards[1], board_cards[3], board_cards[4]]));
+        max_score = max_score.max(self.evaluate_five([hole_cards[0], board_cards[0], board_cards[2], board_cards[3], board_cards[4]]));
+        max_score = max_score.max(self.evaluate_five([hole_cards[0], board_cards[1], board_cards[2], board_cards[3], board_cards[4]]));
+        max_score = max_score.max(self.evaluate_five([hole_cards[1], board_cards[0], board_cards[1], board_cards[2], board_cards[3]]));
+        max_score = max_score.max(self.evaluate_five([hole_cards[1], board_cards[0], board_cards[1], board_cards[2], board_cards[4]]));
+        max_score = max_score.max(self.evaluate_five([hole_cards[1], board_cards[0], board_cards[1], board_cards[3], board_cards[4]]));
+        max_score = max_score.max(self.evaluate_five([hole_cards[1], board_cards[0], board_cards[2], board_cards[3], board_cards[4]]));
+        max_score = max_score.max(self.evaluate_five([hole_cards[1], board_cards[1], board_cards[2], board_cards[3], board_cards[4]]));
+        max_score = max_score.max(self.evaluate_five([board_cards[0], board_cards[1], board_cards[2], board_cards[3], board_cards[4]]));
+    
         max_score
     }
 }
@@ -280,7 +279,7 @@ mod tests {
         let start = std::time::Instant::now();
         let hand = Card::new_random_cards(5);
         for _ in 0..EVALS {
-            let _ = EVALUATOR.evaluate([hand[0], hand[1], hand[2], hand[3], hand[4]]);
+            let _ = EVALUATOR.evaluate_five([hand[0], hand[1], hand[2], hand[3], hand[4]]);
         }
         let duration = start.elapsed();
         assert!(duration.as_secs() < 1);
@@ -292,7 +291,7 @@ mod tests {
         let hands: Vec<NineCardDeal> = (0..100).map(|_| Card::new_random_9_card_game()).collect();
         let start = std::time::Instant::now();
         for i in 0..EVALS {
-            let _ = EVALUATOR.evaluate_deal(&hands[i % 100]);
+            let _ = EVALUATOR.evaluate_nine(&hands[i % 100]);
         }
         let duration = start.elapsed();
         println!("9 card performance test took {:?}", duration);
@@ -304,11 +303,11 @@ mod tests {
     fn order_invariance_hand() {
         for _ in 0..EVALS {
             let hand = Card::new_random_cards(5);
-            let first_eval = EVALUATOR.evaluate([hand[0], hand[1], hand[2], hand[3], hand[4]]);
+            let first_eval = EVALUATOR.evaluate_five([hand[0], hand[1], hand[2], hand[3], hand[4]]);
             for perm in hand.iter().permutations(5) {
                 assert_eq!(
                     first_eval,
-                    EVALUATOR.evaluate([*perm[0], *perm[1], *perm[2], *perm[3], *perm[4]])
+                    EVALUATOR.evaluate_five([*perm[0], *perm[1], *perm[2], *perm[3], *perm[4]])
                 );
             }
         }
@@ -318,7 +317,7 @@ mod tests {
     fn order_invariance_nine_card_game() {
         for _ in 0..EVALS {
             let game = Card::new_random_9_card_game();
-            let first_eval = EVALUATOR.evaluate_deal(&game);
+            let first_eval = EVALUATOR.evaluate_nine(&game);
             let mut rng = rand::thread_rng();
             for perm in game[4..9].iter().permutations(5) {
                 let mut game_perm = [
@@ -327,7 +326,7 @@ mod tests {
                 ];
                 game_perm[0..2].shuffle(&mut rng);
                 game_perm[2..4].shuffle(&mut rng);
-                assert_eq!(first_eval, EVALUATOR.evaluate_deal(&game_perm));
+                assert_eq!(first_eval, EVALUATOR.evaluate_nine(&game_perm));
             }
         }
     }
@@ -350,7 +349,7 @@ mod tests {
             Card::new(Suit::Hearts, Rank::Six),
         ];
 
-        let result = EVALUATOR.evaluate_deal(&straight_deal);
+        let result = EVALUATOR.evaluate_nine(&straight_deal);
         assert_eq!(result, None);
     }
 }

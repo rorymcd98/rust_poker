@@ -1,5 +1,5 @@
 use crate::models::{
-    card::{Card, Rank, RankInt},
+    card::{Card, Rank},
     player,
 };
 use std::fmt::Display;

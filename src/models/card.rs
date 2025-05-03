@@ -5,9 +5,17 @@ use std::{
     array, fmt::{Display, Formatter}, hash::{Hash, Hasher}, str::FromStr
 };
 
-// 2 for traverser, 2 for opponent, 5 for board
+/// A 9 card deal, 2 for traverser, 2 for opponent, 5 for board
 pub type NineCardDeal = [Card; 9];
 
+pub fn deal_string(deal: &NineCardDeal) -> String {
+    format!(
+        "P1 [{}, {}] P2 [{}, {}] Board [{}, {}, {}, {}, {}]",
+        deal[0], deal[1], deal[2], deal[3], deal[4], deal[5], deal[6], deal[7], deal[8]
+    )
+}
+
+/// A card suit
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Default)]
 pub enum Suit {
     #[default]
@@ -61,8 +69,7 @@ impl Suit {
     }
 }
 
-pub type RankInt = u8;
-
+/// A card rank
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Default, Hash, Ord, PartialOrd)]
 pub enum Rank {
     #[default]
@@ -166,6 +173,8 @@ impl Rank {
         }
     }
 
+    /// Returns the prime number corresponding to the rank
+    /// Allows us to generate a unique prime product for a unpaired hand during hand evaluation
     pub fn to_prime(&self) -> u8 {
         match self {
             Rank::Two => 2,
@@ -184,19 +193,24 @@ impl Rank {
         }
     }
 
+    /// Returns the bit corresponding to the rank
+    /// Allows us to generate a unique bitmask for hand evaluation
     pub fn to_bit(&self) -> u32 {
         1 << self.to_int()
     }
 }
 
+/// Returns all possible rank combinations for an unpaired hand
 pub fn all_rank_combos() -> Vec<(Rank, Rank)> {
     (0..13).into_iter().combinations(2).map(|c| (Rank::from_int(c[0]), Rank::from_int(c[1]))).collect()
 }
 
+/// Returns all possible pocket pairs ranks
 pub fn all_pocket_pairs() -> Vec<(Rank, Rank)> {
     (0..13).into_iter().map(|c| (Rank::from_int(c), Rank::from_int(c))).collect()
 }
 
+/// A card
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct Card {
     pub suit: Suit,
@@ -207,13 +221,6 @@ impl Display for Card {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}{}", self.rank, self.suit)
     }
-}
-
-pub fn deal_string(deal: &NineCardDeal) -> String {
-    format!(
-        "P1 [{}, {}] P2 [{}, {}] Board [{}, {}, {}, {}, {}]",
-        deal[0], deal[1], deal[2], deal[3], deal[4], deal[5], deal[6], deal[7], deal[8]
-    )
 }
 
 pub fn cards_string(cards: &[Card]) -> String {
@@ -392,7 +399,6 @@ impl Card {
         Card::new(suit, rank)
     }
 
-    // TODO - move these dealing methods to a different class...
     pub fn all_suited_combos_vs_hole_cards(
         hole_cards: (Card, Card),
         suit: Suit,

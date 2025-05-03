@@ -50,7 +50,7 @@ impl GameStateHelper {
             small_blind_player,
             big_blind_player: small_blind_player.get_opposite(),
             bets_this_round: Cell::new(0),
-            winner: EVALUATOR.evaluate_deal(&nine_card_deal),
+            winner: EVALUATOR.evaluate_nine(&nine_card_deal),
             checks_this_round: Cell::new(0),
         }
     }
