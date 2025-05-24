@@ -14,7 +14,7 @@ pub enum HandType {
 }
 
 
-pub fn classify_hand_type(hand: &Vec<Card>) -> HandType {
+pub fn classify_hand_type(hand: &[Card]) -> HandType {
     let mut rank_counts = [0u8; 13];
     for card in hand {
         let idx = card.rank.to_int() as usize;
@@ -82,7 +82,7 @@ fn evaluate_high_cards(hand: &Vec<Rank>, skip: &[Rank]) -> u32 {
 pub fn evaluate_pair(pair: HandType, cards: Vec<Rank>) -> u32 {
     match pair {
         HandType::Pair(rank) => {
-            (rank.to_int() as u32) << 16 | evaluate_high_cards(&cards, &vec![rank])
+            (rank.to_int() as u32) << 16 | evaluate_high_cards(&cards, &[rank])
         }
         _ => panic!("Unexepected hand type"),
     }
@@ -93,7 +93,7 @@ pub fn evaluate_two_pair(two_pair: HandType, cards: Vec<Rank>) -> u32 {
         HandType::TwoPair(rank1, rank2) => {
             (rank1.to_int() as u32) << 24
                 | (rank2.to_int() as u32) << 16
-                | evaluate_high_cards(&cards, &vec![rank1, rank2])
+                | evaluate_high_cards(&cards, &[rank1, rank2])
         }
         _ => panic!("Unexepected hand type"),
     }
@@ -102,7 +102,7 @@ pub fn evaluate_two_pair(two_pair: HandType, cards: Vec<Rank>) -> u32 {
 pub fn evaluate_three_of_a_kind(pair: HandType, cards: Vec<Rank>) -> u32 {
     match pair {
         HandType::ThreeOfAKind(rank) => {
-            (rank.to_int() as u32) << 16 | evaluate_high_cards(&cards, &vec![rank])
+            (rank.to_int() as u32) << 16 | evaluate_high_cards(&cards, &[rank])
         }
         _ => panic!("Unexepected hand type"),
     }
@@ -113,7 +113,7 @@ pub fn evaluate_full_house(full_house: HandType, cards: Vec<Rank>) -> u32 {
         HandType::FullHouse(rank1, rank2) => {
             (rank1.to_int() as u32) << 24
                 | (rank2.to_int() as u32) << 16
-                | evaluate_high_cards(&cards, &vec![rank1, rank2])
+                | evaluate_high_cards(&cards, &[rank1, rank2])
         }
         _ => panic!("Unexepected hand type"),
     }
@@ -122,7 +122,7 @@ pub fn evaluate_full_house(full_house: HandType, cards: Vec<Rank>) -> u32 {
 pub fn evaluate_four_of_a_kind(pair: HandType, cards: Vec<Rank>) -> u32 {
     match pair {
         HandType::FourOfAKind(rank) => {
-            (rank.to_int() as u32) << 16 | evaluate_high_cards(&cards, &vec![rank])
+            (rank.to_int() as u32) << 16 | evaluate_high_cards(&cards, &[rank])
         }
         _ => panic!("Unexepected hand type"),
     }

@@ -11,6 +11,7 @@ pub const ITERATION_UPDATES: usize = TRAIN_ITERATIONS / 10;
 pub const NUM_THREADS: usize = 12; // Effectively mulitiplies the iterations for training, but allows for greater concurrency
 
 /// Playtime configuration
+#[allow(dead_code)] // Eventually will be used for MCCFR for gadget game
 pub const PLAY_ITERATIONS: usize = 10; // number of iterations for subgame solving
 
 /// Strategy

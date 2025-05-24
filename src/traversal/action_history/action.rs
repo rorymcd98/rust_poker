@@ -51,31 +51,19 @@ impl Action {
     }
 
     pub fn is_deal(&self) -> bool {
-        match self {
-            Action::Deal(_) => true,
-            _ => false,
-        }
+        matches!(self, Action::Deal(_))
     }
 
     pub fn is_call(&self) -> bool {
-        match self {
-            Action::Call => true,
-            _ => false,
-        }
+        matches!(self, Action::Call)
     }
 
     pub fn is_bet(&self) -> bool {
-        match self {
-            Action::Bet => true,
-            _ => false,
-        }
+        matches!(self, Action::Bet)
     }
 
     pub fn is_checkfold(&self) -> bool {
-        match self {
-            Action::CheckFold => true,
-            _ => false,
-        }
+        matches!(self, Action::CheckFold)
     }
 }
 

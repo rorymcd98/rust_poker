@@ -70,7 +70,7 @@ impl TrainingStrategy {
     pub fn update_strategy(
         &mut self,
         strategy_utility: f64,
-        action_utilities: &Vec<f64>,
+        action_utilities: &[f64],
         iteration: usize,
     ) {
         // println!("updating strategy with utilities, {} . {:?}", strategy_utility, action_utilities);
@@ -90,7 +90,6 @@ impl TrainingStrategy {
                 self.regrets_sum[a] *= negative_regret_mulitiplier;
             }
         }
-
 
         // This is CFR+ (not to be used in conjuction with discount CFR)
         // for a in 0..self.actions {

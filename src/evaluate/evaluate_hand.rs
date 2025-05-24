@@ -1,5 +1,3 @@
-use std::u16;
-
 use itertools::Itertools;
 
 use super::generate_tables::generate_flush_table::generate_flushes_table;

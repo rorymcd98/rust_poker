@@ -224,23 +224,26 @@ impl<'a> TrainingBranchTraverser<'a> {
         let strategy = self.get_strategy();
         let current_strategy = strategy.get_current_strategy(training_iteration);
 
-        if self.game_state.current_player.get() == Player::Opponent {
-            let sampled_action = sample_strategy(&current_strategy, num_available_actions);
-            self.traverse_chosen_action(sampled_action, previous_player, pot_before_action, bets_before_action, checks_before)
-        } else {
-            let mut utility = 0.0;
-            let mut utilities = vec![0.0; num_available_actions];
-            for action in 0..num_available_actions {
-                utilities[action] = self.traverse_chosen_action(action, previous_player, pot_before_action, bets_before_action, checks_before);
-                utility += utilities[action] * current_strategy[action];
+        match self.game_state.current_player.get() {
+            Player::Opponent => {
+                let sampled_action = sample_strategy(&current_strategy, num_available_actions);
+                self.traverse_chosen_action(sampled_action, previous_player, pot_before_action, bets_before_action, checks_before)
             }
+            Player::Traverser => {
+                let mut utility = 0.0;
+                let mut utilities = vec![0.0; num_available_actions];
+                for action in 0..num_available_actions {
+                    utilities[action] = self.traverse_chosen_action(action, previous_player, pot_before_action, bets_before_action, checks_before);
+                    utility += utilities[action] * current_strategy[action];
+                }
 
-            {
-                // println!("updating strategy for gamestate {} . {:?}", self.game_state.current_state_as_string(), utilities);
-            } 
-            let strategy = self.get_strategy();   
-            strategy.update_strategy(utility, &utilities, training_iteration);   
-            utility
+                {
+                    // println!("updating strategy for gamestate {} . {:?}", self.game_state.current_state_as_string(), utilities);
+                } 
+                let strategy = self.get_strategy();   
+                strategy.update_strategy(utility, &utilities, training_iteration);   
+                utility
+            }
         }
     }
 

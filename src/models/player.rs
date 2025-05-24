@@ -1,10 +1,8 @@
 use std::fmt::Display;
-
 const TRAVERSER_BYTE: u8 = 0b10000000;
 const OPPONENT_BYTE: u8 = 0b01000000;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
 pub enum Player {
     #[default]
     Traverser,
@@ -59,7 +57,9 @@ mod tests {
 
     #[test]
     fn test_deserialise_player() {
-        assert_eq!(Player::deserialise(&TRAVERSER_BYTE), Player::Traverser);
-        assert_eq!(Player::deserialise(&OPPONENT_BYTE), Player::Opponent);
+        let traverser_matches = matches!(Player::deserialise(&TRAVERSER_BYTE), Player::Traverser);
+        assert!(traverser_matches);
+        let opponent_matches = matches!(Player::deserialise(&OPPONENT_BYTE), Player::Opponent);
+        assert!(opponent_matches);
     }
 }

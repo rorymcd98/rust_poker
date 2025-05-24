@@ -450,7 +450,6 @@ impl<'a> CbvSubTree<'a> {
                     game_state.checkfold();
                     game_state.switch_current_player();
                 },
-                _ => {}
             }
         }
         reaches
@@ -585,7 +584,7 @@ impl<'a> CbvSubTree<'a> {
         let all_hole_cards = reaches.get_hole_cards(current_player);
         let mut next_reaches = vec![reaches.clone(); DEFAULT_ACTION_COUNT];
 
-        if current_player == Player::Opponent {
+        if matches!(current_player, Player::Opponent) {
             for hole_cards in all_hole_cards.iter() {
                 let strategy = self.get_strategy(hole_cards, &current_player, round, pot_before_action, bets_this_round, num_available_actions);
                 for action in 0..num_available_actions {
@@ -727,8 +726,14 @@ fn actions_to_state(actions: &[Action], small_blind_player: Player) -> GameState
     let mut deal_index = 4;
     let mut cards_dealt = 0;
 
-    let mut traverser_pot = if small_blind_player == Player::Traverser { 1 } else { 2 };
-    let mut opponent_pot = if small_blind_player == Player::Opponent { 1 } else { 2 };
+    let mut traverser_pot = match small_blind_player {
+        Player::Traverser => 1,
+        Player::Opponent => 2
+    };
+    let mut opponent_pot = match small_blind_player {
+        Player::Opponent => 1,
+        Player::Traverser => 2
+    };
 
     let mut checks_this_round = 0;
     let mut bets_this_round = 0;
@@ -748,18 +753,24 @@ fn actions_to_state(actions: &[Action], small_blind_player: Player) -> GameState
             Action::Bet => {
                 bets_this_round += 1;
                 let multiplier = if cards_dealt < 5 { 1 } else { 2 };
-                if current_player == Player::Traverser {
-                    traverser_pot = opponent_pot + BIG_BLIND * multiplier;
-                } else {
-                    opponent_pot = traverser_pot + BIG_BLIND * multiplier;
+                match current_player {
+                    Player::Traverser => {
+                        traverser_pot = opponent_pot + BIG_BLIND * multiplier;
+                    },
+                    Player::Opponent => {
+                        opponent_pot = traverser_pot + BIG_BLIND * multiplier;
+                    },
                 }
                 current_player = current_player.get_opposite();
             },
             Action::Call => {
-                if small_blind_player == Player::Traverser {
-                    traverser_pot = opponent_pot;
-                } else {
-                    opponent_pot = traverser_pot;
+                match current_player {
+                    Player::Traverser => {
+                        traverser_pot = opponent_pot;
+                    },
+                    Player::Opponent => {
+                        opponent_pot = traverser_pot;
+                    },
                 }
                 current_player = current_player.get_opposite();
             },
@@ -769,7 +780,6 @@ fn actions_to_state(actions: &[Action], small_blind_player: Player) -> GameState
                 }
                 current_player = current_player.get_opposite();
             }
-            _ => {}
         }
     };
     

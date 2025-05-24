@@ -41,12 +41,7 @@ pub fn validate_history(history: &Vec<Action>) {
     let mut bets_this_turn = 0;
 
     fn is_round_over(prev_prev: &Action, prev: &Action) -> bool {
-        match [prev_prev, prev] {
-            [Action::CheckFold, Action::CheckFold] => true,
-            [Action::Bet, Action::Call] => true,
-            [Action::Call, Action::CheckFold] => true,
-            _ => false,
-        }
+            matches!([prev_prev, prev], [Action::CheckFold, Action::CheckFold] | [Action::Bet, Action::Call] | [Action::Call, Action::CheckFold])
     }
 
     for action in &history[2..] {
@@ -187,7 +182,7 @@ pub struct ActionHistoryByteStreamIterator<'a> {
 }
 
 impl ActionHistoryByteStreamIterator<'_> {
-    pub fn new(byte_stream: &Vec<u8>) -> ActionHistoryByteStreamIterator<'_> {
+    pub fn new(byte_stream: &[u8]) -> ActionHistoryByteStreamIterator<'_> {
         ActionHistoryByteStreamIterator {
             byte_stream_iterator: byte_stream.iter(),
         }
@@ -196,22 +191,10 @@ impl ActionHistoryByteStreamIterator<'_> {
     // Check if the current action is an 'impossible' action given the previous action
     fn is_terminal_serialiastion(prev_action: &Action, current_action: &Action) -> bool {
         match prev_action {
-            Action::CheckFold => match current_action {
-                Action::Call => true,
-                _ => false,
-            },
-            Action::Call => match current_action {
-                Action::Bet => true, // except preflop bb call
-                _ => false,
-            },
-            Action::Bet => match current_action {
-                Action::Deal(_) => true,
-                _ => false,
-            },
-            Action::Deal(_) => match current_action {
-                Action::Deal(_) => true,
-                _ => false,
-            },
+            Action::CheckFold => matches!(current_action, Action::Call),
+            Action::Call => matches!(current_action, Action::Bet), // except preflop bb call
+            Action::Bet => matches!(current_action, Action::Deal(_)),
+            Action::Deal(_) => matches!(current_action, Action::Deal(_)),
         }
     }
 }

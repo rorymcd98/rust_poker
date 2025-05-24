@@ -47,7 +47,7 @@ mod tests {
         }
     }
 
-    fn compare_fives(hand1: &Vec<Card>, hand2: &[Card], ord: std::cmp::Ordering) {
+    fn compare_fives(hand1: &[Card], hand2: &[Card], ord: std::cmp::Ordering) {
         if hand1.iter().unique().count() != 5 || hand2.iter().unique().count() != 5 {
             panic!("Hands must have 5 unique cards");
         };

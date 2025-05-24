@@ -8,6 +8,7 @@ use crate::models::card::{cards_string, NineCardDeal};
 use crate::models::Player;
 use crate::models::Card;
 use std::cell::Cell;
+use std::fmt::Display;
 use super::super::action_history::game_abstraction::GameAbstraction;
 use super::terminal_state::TerminalState;
 
@@ -34,15 +35,13 @@ impl GameStateHelper {
     pub fn new(nine_card_deal: NineCardDeal, small_blind_player: Player) -> GameStateHelper {
         GameStateHelper {
             game_abstraction: convert_deal_into_abstraction(nine_card_deal),
-            traverser_pot: Cell::new(if small_blind_player == Player::Traverser {
-                SMALL_BLIND
-            } else {
-                BIG_BLIND
+            traverser_pot: Cell::new(match small_blind_player {
+                Player::Traverser => SMALL_BLIND,
+                Player::Opponent => BIG_BLIND
             }),
-            opponent_pot: Cell::new(if small_blind_player == Player::Opponent {
-                SMALL_BLIND
-            } else {
-                BIG_BLIND
+            opponent_pot: Cell::new(match small_blind_player {
+                Player::Opponent => SMALL_BLIND,
+                Player::Traverser => BIG_BLIND
             }),
             cards: nine_card_deal,
             cards_dealt: Cell::new(0),
@@ -273,15 +272,15 @@ impl GameStateHelper {
         self.current_player.set(previous_player);
         self.checks_this_street.set(previous_checks);
     }
+}
 
-    #[allow(dead_code)]
-    pub fn to_string(&self) -> String{
-        format!(
+impl Display for GameStateHelper {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
             "Current state: Player Cards: {} Cards dealt: {} Current player: {}\nTraverser pot: {} Opponent pot: {} Bets this street: {} Checks this street: {}",
             cards_string(&self.get_current_player_cards()),
-            {
-                cards_string(&self.cards[4..4+self.cards_dealt.get() as usize])
-            },
+            cards_string(&self.cards[4..4+self.cards_dealt.get() as usize]),
             self.get_current_player(),
             self.traverser_pot.get(),
             self.opponent_pot.get(),

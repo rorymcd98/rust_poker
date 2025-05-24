@@ -104,16 +104,14 @@ impl<TStrategy: Strategy + Debug> StrategyHub<TStrategy> {
                 is_sb: true,
             };
 
-            let bb_strategy = self.bb_in_store.remove(&bb_key);
-            if bb_strategy.is_some() {
-                let sb_strategy = self.sb_in_store.remove(&sb_key);
-                if sb_strategy.is_some() {
+            if let Some(bb_strategy) = self.bb_in_store.remove(&bb_key) {
+                if let Some(sb_strategy) = self.sb_in_store.remove(&sb_key) {
                     self.out_queue.push(StrategyPair {
-                        sb_branch: sb_strategy.unwrap().1,
-                        bb_branch: bb_strategy.unwrap().1,
+                        sb_branch: sb_strategy.1,
+                        bb_branch: bb_strategy.1,
                     }).expect("Should not fail to push to queue");
                 } else {
-                    self.bb_in_store.insert(bb_key, bb_strategy.unwrap().1);
+                    self.bb_in_store.insert(bb_key, bb_strategy.1);
                 }
             }
         }
@@ -209,7 +207,8 @@ use std::fs::File;
 use std::io::Read;
 
 /// Serialise the strategy hub to disk using a compression library (in this case GZIP)
-/// N.B. - At this point we cannot turn our strategy hub back into a TrainingStrategy hub, at this point it can only be used for play / evaluation - this means training must happen all at once
+/// 
+/// Remark: At this point we cannot turn our strategy hub back into a TrainingStrategy hub, at this point it can only be used for play / evaluation - this means training must happen all at once
 pub fn serialise_strategy_hub(
     output_folder: &str,
     strategy_hub: StrategyHub<TrainingStrategy>,

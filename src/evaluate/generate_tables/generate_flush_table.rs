@@ -55,7 +55,7 @@ mod uniques_generation_test {
     }
 }
 
-fn is_straight(hand: &Vec<Card>) -> bool {
+fn is_straight(hand: &[Card]) -> bool {
     let mut ranks = [0u8; 14]; // 0 is for Ace, 14 is for high
     for card in hand {
         ranks[1 + card.rank.to_int() as usize] += 1;
@@ -77,7 +77,7 @@ fn is_straight(hand: &Vec<Card>) -> bool {
     false
 }
 
-fn evaluate_straight(hand: &Vec<Card>) -> u32 {
+fn evaluate_straight(hand: &[Card]) -> u32 {
     let mut prod = 1;
     for card in hand {
         prod *= card.rank.to_int() as u32;
@@ -311,7 +311,7 @@ mod flush_tests {
         }
     }
 
-    fn compare_flushes(hand1: &Vec<Card>, hand2: &Vec<Card>, ord: std::cmp::Ordering) {
+    fn compare_flushes(hand1: &[Card], hand2: &[Card], ord: std::cmp::Ordering) {
         if hand1.iter().unique().count() != 5 || hand2.iter().unique().count() != 5 {
             panic!("Hands must have 5 unique cards");
         };

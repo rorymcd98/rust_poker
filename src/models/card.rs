@@ -105,7 +105,7 @@ impl Suit {
         }
     }
 
-    pub fn to_int(&self) -> u8 {
+    pub fn to_int(self) -> u8 {
         match self {
             Suit::Spades => 0,
             Suit::Hearts => 1,
@@ -114,7 +114,7 @@ impl Suit {
         }
     }
 
-    pub fn to_bit(&self) -> u32 {
+    pub fn to_bit(self) -> u32 {
         1 << self.to_int()
     }
 
@@ -209,7 +209,7 @@ impl Rank {
         }
     }
 
-    pub fn to_int(&self) -> u8 {
+    pub fn to_int(self) -> u8 {
         match self {
             Rank::Two => 0,
             Rank::Three => 1,
@@ -229,7 +229,7 @@ impl Rank {
 
     /// Returns the prime number corresponding to the rank
     /// Allows us to generate a unique prime product for a unpaired hand during hand evaluation
-    pub fn to_prime(&self) -> u8 {
+    pub fn to_prime(self) -> u8 {
         match self {
             Rank::Two => 2,
             Rank::Three => 3,
@@ -249,7 +249,7 @@ impl Rank {
 
     /// Returns the bit corresponding to the rank
     /// Allows us to generate a unique bitmask for hand evaluation
-    pub fn to_bit(&self) -> u32 {
+    pub fn to_bit(self) -> u32 {
         1 << self.to_int()
     }
 }
@@ -353,7 +353,7 @@ impl Card {
     }
 
     #[allow(dead_code)]
-    pub fn get_one_more_card(existing_cards: &Vec<Card>) -> Card {
+    pub fn get_one_more_card(existing_cards: &[Card]) -> Card {
         let mut taken = [false; 52];
         for card in existing_cards {
             taken[card.to_int() as usize] = true;
@@ -368,7 +368,7 @@ impl Card {
         })
     }
 
-    pub fn serialise(&self) -> u8 {
+    pub fn serialise(self) -> u8 {
         let suit = match self.suit {
             Suit::Spades => 0,
             Suit::Hearts => 1,
