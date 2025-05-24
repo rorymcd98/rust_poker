@@ -149,11 +149,16 @@ impl HandLookup for HandLookupArrays {
 /// 7463 is a Royal Flush
 /// 1 is a High Card 7
 pub trait HandEvaluator {
-    /// Evaluate a 5 card hand into its absolute rank amongs all 5 card hands 
+    /// Evaluate a 5 card hand into its absolute rank amongs all 5 card hands
     fn evaluate_five(&self, cards: [Card; 5]) -> u16;
-    /// Evaluate a 7 card deal into its maximum 5 card deal 
+    /// Evaluate a 7 card deal into its maximum 5 card deal
     /// The short_circuit parameter allows us to return early if we encounter a greater value
-    fn evaluate_seven(&self, hole_cards: &[Card; 2], board_cards: &[Card; 5], short_circuit: u16) -> u16;
+    fn evaluate_seven(
+        &self,
+        hole_cards: &[Card; 2],
+        board_cards: &[Card; 5],
+        short_circuit: u16,
+    ) -> u16;
     /// Evaluate which player has the best 7 card deal [2 Traverser cards] [2 Opponent cards] [7 Board cards]
     fn evaluate_nine(&self, deal: &[Card; 9]) -> Option<Player>;
 }
@@ -209,8 +214,12 @@ impl HandEvaluator for HandEvaluatorLookup {
 
     fn evaluate_nine(&self, deal: &[Card; 9]) -> Option<Player> {
         let board: &[Card; 5] = deal[4..9].try_into().expect("Board is not 5 cards");
-        let traverser_cards: &[Card; 2] = deal[0..2].try_into().expect("Traverser cards are not 2 cards");
-        let opponenet_cards: &[Card; 2] = deal[2..4].try_into().expect("Opponent cards are not 2 cards");
+        let traverser_cards: &[Card; 2] = deal[0..2]
+            .try_into()
+            .expect("Traverser cards are not 2 cards");
+        let opponenet_cards: &[Card; 2] = deal[2..4]
+            .try_into()
+            .expect("Opponent cards are not 2 cards");
 
         let best_score_traverser = self.evaluate_seven(traverser_cards, board, u16::MAX);
         let best_score_opponent = self.evaluate_seven(opponenet_cards, board, best_score_traverser);
@@ -222,34 +231,27 @@ impl HandEvaluator for HandEvaluatorLookup {
         }
     }
 
-    fn evaluate_seven(&self, hole_cards: &[Card; 2], board_cards: &[Card; 5], short_circuit: u16) -> u16 {
+    fn evaluate_seven(
+        &self,
+        hole_cards: &[Card; 2],
+        board_cards: &[Card; 5],
+        short_circuit: u16,
+    ) -> u16 {
         let mut cards = Vec::with_capacity(7);
         cards.extend_from_slice(hole_cards);
         cards.extend_from_slice(board_cards);
-    
+
         let mut max_score = 0;
 
-        if short_circuit == u16::MAX{
+        if short_circuit == u16::MAX {
             for combo in cards.iter().combinations(5) {
-                let hand = [
-                    *combo[0],
-                    *combo[1],
-                    *combo[2],
-                    *combo[3],
-                    *combo[4],
-                ];
+                let hand = [*combo[0], *combo[1], *combo[2], *combo[3], *combo[4]];
                 let score = self.evaluate_five(hand);
                 max_score = max_score.max(score);
             }
         } else {
             for combo in cards.iter().combinations(5) {
-                let hand = [
-                    *combo[0],
-                    *combo[1],
-                    *combo[2],
-                    *combo[3],
-                    *combo[4],
-                ];
+                let hand = [*combo[0], *combo[1], *combo[2], *combo[3], *combo[4]];
                 let score = self.evaluate_five(hand);
                 if short_circuit != u16::MAX && score > short_circuit {
                     return score;
@@ -353,11 +355,9 @@ mod tests {
             // Traverser cards
             Card::new(Suit::Spades, Rank::Jack),
             Card::new(Suit::Clubs, Rank::Jack),
-
             // Opponent cards
             Card::new(Suit::Spades, Rank::King),
             Card::new(Suit::Clubs, Rank::King),
-
             Card::new(Suit::Hearts, Rank::Two),
             Card::new(Suit::Diamonds, Rank::Three),
             Card::new(Suit::Hearts, Rank::Four),

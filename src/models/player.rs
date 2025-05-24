@@ -9,7 +9,6 @@ pub enum Player {
     Opponent,
 }
 
-
 impl Display for Player {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

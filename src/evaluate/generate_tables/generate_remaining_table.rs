@@ -138,7 +138,7 @@ mod tests {
 
     fn evaluate_remaining(hand: &[Card]) -> u16 {
         let prime_product_identifier = hand_to_unique_prime_product(hand);
-        
+
         REMAINING_TABLE[prime_product_identifier]
     }
 

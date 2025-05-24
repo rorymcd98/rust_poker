@@ -1,8 +1,7 @@
 use crate::{models::card::Rank, models::Card};
 
 /// Hand evaluation for cards which aren't flushes, straights, or high cards
-#[derive(Debug, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, PartialEq, Eq, Default)]
 pub enum HandType {
     Pair(Rank),
     TwoPair(Rank, Rank),
@@ -12,7 +11,6 @@ pub enum HandType {
     #[default]
     None,
 }
-
 
 pub fn classify_hand_type(hand: &[Card]) -> HandType {
     let mut rank_counts = [0u8; 13];
@@ -81,9 +79,7 @@ fn evaluate_high_cards(hand: &Vec<Rank>, skip: &[Rank]) -> u32 {
 
 pub fn evaluate_pair(pair: HandType, cards: Vec<Rank>) -> u32 {
     match pair {
-        HandType::Pair(rank) => {
-            (rank.to_int() as u32) << 16 | evaluate_high_cards(&cards, &[rank])
-        }
+        HandType::Pair(rank) => (rank.to_int() as u32) << 16 | evaluate_high_cards(&cards, &[rank]),
         _ => panic!("Unexepected hand type"),
     }
 }

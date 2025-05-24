@@ -1,6 +1,6 @@
 use crate::{
     models::{
-        card::{NineCardDeal, Rank, Card},
+        card::{Card, NineCardDeal, Rank},
         Player,
     },
     traversal::action_history::card_round_abstraction::CardRoundAbstraction,
@@ -11,7 +11,13 @@ use super::card_round_abstraction::CardRoundAbstractionSerialised;
 pub type GameAbstractionSerialised = Vec<u8>;
 
 #[allow(dead_code)]
-pub fn to_string_game_abstraction(hole1: Rank, hole2: Rank, suited: bool, is_sb: bool, abstraction: &GameAbstractionSerialised) -> String {
+pub fn to_string_game_abstraction(
+    hole1: Rank,
+    hole2: Rank,
+    suited: bool,
+    is_sb: bool,
+    abstraction: &GameAbstractionSerialised,
+) -> String {
     let round = abstraction[0];
     let game_pot = abstraction[1];
     let bets_this_round = abstraction[2];
@@ -33,13 +39,13 @@ pub fn to_string_game_abstraction(hole1: Rank, hole2: Rank, suited: bool, is_sb:
         game_pot,
         bets_this_round,
         round_abstraction
-        )
+    )
 }
 
 /// The GameAbstraction allows us to compress the information state for each player into a few important pieces of information such as:
 /// - A compressed view of the action that lead to this point (how much has been bet, whos turn it is)
 /// - How each player's hand secretly connects with the board (do they have a straight or a flush draw, any pairs/sets/quads etc.)
-/// 
+///
 /// Remark: This is massively important as it means we can begin to accumulate regrets for similar situations while training
 #[derive(Default, Clone)]
 pub struct GameAbstraction {
@@ -69,7 +75,7 @@ impl GameAbstraction {
         serialised.extend(round_abstraction.clone());
         serialised
     }
-    
+
     pub fn get_abstraction_from_round(
         round: usize,
         game_pot: u8,
@@ -87,7 +93,12 @@ impl GameAbstraction {
     }
 
     /// Replace the round abstraction for the current player without creating a whole new vec
-    pub fn replace_round_abstraction(&self, game_abstraction_serialised: &mut GameAbstractionSerialised, round: usize, current_player: &Player) -> bool {
+    pub fn replace_round_abstraction(
+        &self,
+        game_abstraction_serialised: &mut GameAbstractionSerialised,
+        round: usize,
+        current_player: &Player,
+    ) -> bool {
         let round_abstraction = match current_player {
             Player::Traverser => &self.traverser_round_abstractions[round],
             Player::Opponent => &self.opponent_round_abstractions[round],
@@ -101,12 +112,26 @@ impl GameAbstraction {
 }
 
 /// Get the game abstarction for the current game state
-pub fn get_current_abstraction(hole_cards: &(Card, Card), board_cards: &[Card], round: usize, game_pot: u8, bets_this_round: u8) -> GameAbstractionSerialised {
+pub fn get_current_abstraction(
+    hole_cards: &(Card, Card),
+    board_cards: &[Card],
+    round: usize,
+    game_pot: u8,
+    bets_this_round: u8,
+) -> GameAbstractionSerialised {
     let card_round_abstraction = convert_cards_into_card_abstraction(hole_cards, board_cards);
-    GameAbstraction::get_abstraction_from_round(round, game_pot, bets_this_round, card_round_abstraction)
+    GameAbstraction::get_abstraction_from_round(
+        round,
+        game_pot,
+        bets_this_round,
+        card_round_abstraction,
+    )
 }
 
-fn convert_cards_into_card_abstraction(hole_cards: &(Card, Card), board_cards: &[Card]) -> CardRoundAbstractionSerialised {
+fn convert_cards_into_card_abstraction(
+    hole_cards: &(Card, Card),
+    board_cards: &[Card],
+) -> CardRoundAbstractionSerialised {
     CardRoundAbstraction::new(&[hole_cards.0, hole_cards.1], board_cards).serialise()
 }
 

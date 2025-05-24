@@ -106,7 +106,8 @@ impl TrainingStrategy {
         let current_strategy = self.get_current_strategy(iteration as usize);
         for index in 0..self.actions {
             // Add a DCRF weighted strategy to the strategy sum
-            let contribution = current_strategy[index] * ((iteration / (iteration + 1.0)).powf(GAMMA)); // Weighted according to the iteration using DCRF
+            let contribution =
+                current_strategy[index] * ((iteration / (iteration + 1.0)).powf(GAMMA)); // Weighted according to the iteration using DCRF
             self.strategy_sum[index] += contribution;
         }
     }

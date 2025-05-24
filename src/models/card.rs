@@ -2,7 +2,10 @@ use crate::thread_utils::with_rng;
 use itertools::Itertools;
 use rand::{seq::SliceRandom, Rng};
 use std::{
-    array, fmt::{Display, Formatter}, hash::{Hash, Hasher}, str::FromStr
+    array,
+    fmt::{Display, Formatter},
+    hash::{Hash, Hasher},
+    str::FromStr,
 };
 
 /// A 9 card deal, 2 for traverser, 2 for opponent, 5 for board
@@ -256,12 +259,17 @@ impl Rank {
 
 /// Returns all possible rank combinations for an unpaired hand
 pub fn all_rank_combos() -> Vec<(Rank, Rank)> {
-    (0..13).combinations(2).map(|c| (Rank::from_int(c[0]), Rank::from_int(c[1]))).collect()
+    (0..13)
+        .combinations(2)
+        .map(|c| (Rank::from_int(c[0]), Rank::from_int(c[1])))
+        .collect()
 }
 
 /// Returns all possible pocket pairs ranks
 pub fn all_pocket_pairs() -> Vec<(Rank, Rank)> {
-    (0..13).map(|c| (Rank::from_int(c), Rank::from_int(c))).collect()
+    (0..13)
+        .map(|c| (Rank::from_int(c), Rank::from_int(c)))
+        .collect()
 }
 
 /// A card
@@ -473,10 +481,7 @@ impl Ord for Card {
 mod tests {
     use super::*;
     use rstest::rstest;
-    use std::{
-        collections::HashSet,
-        time::Instant,
-    };
+    use std::{collections::HashSet, time::Instant};
 
     #[test]
     fn test_suit_from_int() {
@@ -621,8 +626,7 @@ mod tests {
     #[test]
     fn all_suited_hole_card_combos() {
         // are unique, there are 78 of them, they are all sorted, they are all the same suit
-        let combos = Card::all_suited_combos(Suit::Spades)
-            .collect::<Vec<_>>();
+        let combos = Card::all_suited_combos(Suit::Spades).collect::<Vec<_>>();
         assert_eq!(combos.len(), 12 * 13 / 2);
         let mut seen = HashSet::new();
         for combo in combos {
@@ -635,17 +639,19 @@ mod tests {
     }
 
     #[test]
-    fn card_order(){
+    fn card_order() {
         assert!(Card::new(Suit::Spades, Rank::Two) < Card::new(Suit::Spades, Rank::Three));
         assert!(Card::new(Suit::Spades, Rank::Two) < Card::new(Suit::Hearts, Rank::Two));
         assert!(Card::new(Suit::Hearts, Rank::Two) < Card::new(Suit::Spades, Rank::Three));
 
-        let cards = [Card::new(Suit::Spades, Rank::Two),
+        let cards = [
+            Card::new(Suit::Spades, Rank::Two),
             Card::new(Suit::Hearts, Rank::Two),
             Card::new(Suit::Spades, Rank::Three),
             Card::new(Suit::Hearts, Rank::Three),
             Card::new(Suit::Spades, Rank::Ace),
-            Card::new(Suit::Hearts, Rank::Ace)];
+            Card::new(Suit::Hearts, Rank::Ace),
+        ];
         assert!(cards.is_sorted());
     }
 }

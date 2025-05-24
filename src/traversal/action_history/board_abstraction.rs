@@ -107,7 +107,6 @@ impl BoardAbstraction {
             },
         }
     }
-
 }
 #[cfg(test)]
 mod tests {

@@ -41,7 +41,12 @@ pub fn validate_history(history: &Vec<Action>) {
     let mut bets_this_turn = 0;
 
     fn is_round_over(prev_prev: &Action, prev: &Action) -> bool {
-            matches!([prev_prev, prev], [Action::CheckFold, Action::CheckFold] | [Action::Bet, Action::Call] | [Action::Call, Action::CheckFold])
+        matches!(
+            [prev_prev, prev],
+            [Action::CheckFold, Action::CheckFold]
+                | [Action::Bet, Action::Call]
+                | [Action::Call, Action::CheckFold]
+        )
     }
 
     for action in &history[2..] {
@@ -127,7 +132,6 @@ pub fn validate_history(history: &Vec<Action>) {
         }
     }
 }
-
 
 /// A live record of the game state that also acts as a key to the various strategies
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -296,7 +300,6 @@ mod tests {
     use crate::models::card::{Card, Rank, Suit};
 
     use super::*;
-    
 
     fn validate_history(history: Vec<Action>) {
         let action_history = ActionHistory::new(history);

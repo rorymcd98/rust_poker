@@ -1,22 +1,50 @@
 use std::collections::HashMap;
 
-use crate::{config::BLUEPRINT_FOLDER, models::{card::{all_pocket_pairs, all_rank_combos, new_random_nine_card_game_with}, Card, Player, Suit}, traversal::{action_history::{action::DEFAULT_ACTION_COUNT, game_abstraction::{convert_deal_into_abstraction, GameAbstractionSerialised}}, strategy::{play_strategy::PlayStrategy, strategy_branch::{StrategyBranch, StrategyHubKey}, strategy_hub::deserialise_strategy_hub, strategy_trait::Strategy, training_strategy::TrainingStrategy}}};
+use crate::{
+    config::BLUEPRINT_FOLDER,
+    models::{
+        card::{all_pocket_pairs, all_rank_combos, new_random_nine_card_game_with},
+        Card, Player, Suit,
+    },
+    traversal::{
+        action_history::{
+            action::DEFAULT_ACTION_COUNT,
+            game_abstraction::{convert_deal_into_abstraction, GameAbstractionSerialised},
+        },
+        strategy::{
+            play_strategy::PlayStrategy,
+            strategy_branch::{StrategyBranch, StrategyHubKey},
+            strategy_hub::deserialise_strategy_hub,
+            strategy_trait::Strategy,
+            training_strategy::TrainingStrategy,
+        },
+    },
+};
 
-pub fn validate_strategies(){
-    let strategy_map: HashMap<StrategyHubKey, StrategyBranch<TrainingStrategy>> = deserialise_strategy_hub(BLUEPRINT_FOLDER).unwrap();
+pub fn validate_strategies() {
+    let strategy_map: HashMap<StrategyHubKey, StrategyBranch<TrainingStrategy>> =
+        deserialise_strategy_hub(BLUEPRINT_FOLDER).unwrap();
     validate_strategy_map::<TrainingStrategy>(&strategy_map);
 }
 
-pub fn validate_strategy_map<TStrategy: Strategy>(strategy_map: &HashMap<StrategyHubKey, StrategyBranch<TrainingStrategy>>) {
+pub fn validate_strategy_map<TStrategy: Strategy>(
+    strategy_map: &HashMap<StrategyHubKey, StrategyBranch<TrainingStrategy>>,
+) {
     for abstraction in generate_preflop_abstractions() {
         let strategy_branch = strategy_map.get(&abstraction.0).unwrap();
         strategy_branch.print_stats();
         let default_strategy = TrainingStrategy::new(DEFAULT_ACTION_COUNT);
-        let strategy = strategy_branch.get_strategy(&abstraction.1).unwrap_or(&default_strategy);
-        println!("{}: strat {:?}, regrets {:?}", abstraction.0, PlayStrategy::from_train_strategy(strategy.clone()).get_current_strategy(100000), strategy.regrets_sum);
+        let strategy = strategy_branch
+            .get_strategy(&abstraction.1)
+            .unwrap_or(&default_strategy);
+        println!(
+            "{}: strat {:?}, regrets {:?}",
+            abstraction.0,
+            PlayStrategy::from_train_strategy(strategy.clone()).get_current_strategy(100000),
+            strategy.regrets_sum
+        );
     }
 }
-
 
 // Generate all offsuit SB abstractions
 pub fn generate_preflop_abstractions() -> Vec<(StrategyHubKey, GameAbstractionSerialised)> {

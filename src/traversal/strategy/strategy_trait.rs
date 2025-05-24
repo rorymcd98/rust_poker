@@ -1,6 +1,5 @@
 use crate::traversal::action_history::action::DEFAULT_ACTION_COUNT;
 
-
 /// A trait for both training and utilising strategies
 pub trait Strategy {
     fn new(actions: usize) -> Self;

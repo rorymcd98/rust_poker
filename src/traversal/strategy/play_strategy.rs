@@ -1,5 +1,5 @@
-use crate::traversal::action_history::action::DEFAULT_ACTION_COUNT;
 use super::{strategy_trait::Strategy, training_strategy::TrainingStrategy};
+use crate::traversal::action_history::action::DEFAULT_ACTION_COUNT;
 
 /// A strategy used at runtime for playing / evaluating a game
 #[derive(Debug, Clone)]
@@ -16,15 +16,24 @@ impl Strategy for PlayStrategy {
             play_strategy[a] = 1.0 / actions as f64;
         }
         play_strategy[0] = 1.0; // TODO - Assess if this at all likely
-        PlayStrategy { actions: 0, play_strategy}
+        PlayStrategy {
+            actions: 0,
+            play_strategy,
+        }
     }
 
     fn get_current_strategy(&self, _iteration: usize) -> [f64; DEFAULT_ACTION_COUNT] {
         self.play_strategy
     }
 
-    fn from_existing_strategy(actions: usize, strategy: [f64; DEFAULT_ACTION_COUNT]) -> PlayStrategy {
-        PlayStrategy { actions, play_strategy: strategy }
+    fn from_existing_strategy(
+        actions: usize,
+        strategy: [f64; DEFAULT_ACTION_COUNT],
+    ) -> PlayStrategy {
+        PlayStrategy {
+            actions,
+            play_strategy: strategy,
+        }
     }
 
     fn get_actions(&self) -> usize {
@@ -33,7 +42,7 @@ impl Strategy for PlayStrategy {
 }
 
 impl PlayStrategy {
-    pub fn from_train_strategy(train_strategy: TrainingStrategy) -> PlayStrategy {       
+    pub fn from_train_strategy(train_strategy: TrainingStrategy) -> PlayStrategy {
         let mut normalizing_sum = 0.0;
         let mut return_strategy = [0f64; DEFAULT_ACTION_COUNT];
 
@@ -51,6 +60,9 @@ impl PlayStrategy {
                 return_strategy[a] = 1.0 / train_strategy.actions as f64;
             }
         };
-        PlayStrategy { actions: train_strategy.actions, play_strategy: return_strategy }
+        PlayStrategy {
+            actions: train_strategy.actions,
+            play_strategy: return_strategy,
+        }
     }
 }

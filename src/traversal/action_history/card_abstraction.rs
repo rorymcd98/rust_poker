@@ -17,7 +17,7 @@ pub struct StraightAbstraction {
     /// The highest card, but bucketed according to rank
     pub bucketed_high_card: Rank, // Can be further bucketed e.g. A-K, Q-T, 9-5
     /// The number of cards in the straight
-    pub cards_in_straight: u8,    // 0, 1, (& 2 on flop)
+    pub cards_in_straight: u8, // 0, 1, (& 2 on flop)
     /// Whether the straight requires a gutshot
     pub requires_gutshot: bool,
 }
@@ -852,7 +852,10 @@ impl ConnectedCardsAbstraction {
                 high_card_is_house: (serialised & 0b1) == 1,
             }),
             5 => ConnectedCardsAbstraction::FourOfAKind,
-            _ => panic!("Invalid connected card abstraction serialisation {}", serialised),
+            _ => panic!(
+                "Invalid connected card abstraction serialisation {}",
+                serialised
+            ),
         }
     }
 }

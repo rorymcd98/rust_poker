@@ -1,11 +1,11 @@
+mod config;
 mod evaluate;
-mod traversal;
-mod thread_utils;
+mod misc_tests;
 mod models;
 mod subgame_solver;
-mod config;
-mod misc_tests;
+mod thread_utils;
+mod traversal;
 
 pub mod validation;
-pub use traversal::main_train::begin_tree_train_traversal;
 pub use subgame_solver::solve::solve_cbr_utilties2;
+pub use traversal::main_train::begin_tree_train_traversal;

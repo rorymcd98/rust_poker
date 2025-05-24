@@ -1,5 +1,7 @@
+use crate::{
+    models::card::Rank, traversal::action_history::game_abstraction::GameAbstractionSerialised,
+};
 use std::{collections::HashMap, fmt::Display};
-use crate::{models::card::Rank, traversal::action_history::game_abstraction::GameAbstractionSerialised};
 
 use super::strategy_trait::Strategy;
 
@@ -30,7 +32,7 @@ impl Display for StrategyHubKey {
 pub struct StrategyBranch<TStrategy> {
     pub strategy_hub_key: StrategyHubKey,
     pub map: HashMap<GameAbstractionSerialised, TStrategy>,
-    
+
     // For debugging
     pub new_generated: usize,
 }
@@ -49,18 +51,13 @@ impl<TStrategy: Strategy + Clone> StrategyBranch<TStrategy> {
         info_set: GameAbstractionSerialised,
         num_actions: usize,
     ) -> &mut TStrategy {
-        self.map
-            .entry(info_set)
-            .or_insert_with(|| {
-                self.new_generated += 1;
-                TStrategy::new(num_actions)
-            })
+        self.map.entry(info_set).or_insert_with(|| {
+            self.new_generated += 1;
+            TStrategy::new(num_actions)
+        })
     }
 
-    pub fn get_strategy(
-        &self,
-        info_set: &GameAbstractionSerialised,
-    ) -> Option<&TStrategy> {
+    pub fn get_strategy(&self, info_set: &GameAbstractionSerialised) -> Option<&TStrategy> {
         match self.map.get(info_set) {
             Some(strategy) => Some(strategy),
             None => None,
@@ -77,7 +74,7 @@ impl<TStrategy: Strategy + Clone> StrategyBranch<TStrategy> {
             None => {
                 self.new_generated += 1;
                 TStrategy::new(num_actions)
-            },
+            }
         }
     }
 

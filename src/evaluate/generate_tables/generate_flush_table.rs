@@ -295,7 +295,7 @@ mod flush_tests {
     fn evaluate_flush(hand: &[Card]) -> u16 {
         let hand = hand_to_id(hand);
         let rank_mask = unique_rank_mask(&hand);
-        
+
         FLUSHES_MAP[rank_mask as usize]
     }
 
