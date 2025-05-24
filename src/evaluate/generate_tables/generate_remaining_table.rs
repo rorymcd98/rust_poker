@@ -138,8 +138,8 @@ mod tests {
 
     fn evaluate_remaining(hand: &[Card]) -> u16 {
         let prime_product_identifier = hand_to_unique_prime_product(hand);
-        let evaluation = REMAINING_TABLE[prime_product_identifier];
-        evaluation
+        
+        REMAINING_TABLE[prime_product_identifier]
     }
 
     #[test]
@@ -340,11 +340,11 @@ mod tests {
             let hand_type = classify_hand_type(&hand);
             match hand_type {
                 HandType::None => assert!(eval == 0),
-                HandType::Pair(_) => assert!(eval < 4138 && eval >= 1278),
-                HandType::TwoPair(_, _) => assert!(eval < 4996 && eval >= 4138),
-                HandType::ThreeOfAKind(_) => assert!(eval < 5854 && eval >= 4996),
-                HandType::FullHouse(_, _) => assert!(eval < 7297 && eval >= 7141),
-                HandType::FourOfAKind(_) => assert!(eval < 7453 && eval >= 7297),
+                HandType::Pair(_) => assert!((1278..4138).contains(&eval)),
+                HandType::TwoPair(_, _) => assert!((4138..4996).contains(&eval)),
+                HandType::ThreeOfAKind(_) => assert!((4996..5854).contains(&eval)),
+                HandType::FullHouse(_, _) => assert!((7141..7297).contains(&eval)),
+                HandType::FourOfAKind(_) => assert!((7297..7453).contains(&eval)),
             }
         }
     }

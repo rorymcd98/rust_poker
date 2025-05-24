@@ -41,7 +41,7 @@ impl StraightAbstraction {
     }
 
     pub fn deserialise(serialised: &u8) -> StraightAbstraction {
-        let highest_card = Rank::from_int((serialised >> 4) as u8);
+        let highest_card = Rank::from_int(serialised >> 4);
         let cards_in_straight = (serialised >> 1) & 0b111;
         let requires_gutshot = (serialised & 0b1) == 1;
         StraightAbstraction {
@@ -58,7 +58,7 @@ pub fn get_straight_abstraction(
     hole_cards: &[Card; 2],
     board_cards: &[Card],
 ) -> Option<StraightAbstraction> {
-    if board_cards.len() == 0 {
+    if board_cards.is_empty() {
         return None;
     }
     let mut rank_counts = [false; 14];
@@ -245,7 +245,7 @@ mod straight_abstraction_tests {
         let abstraction = get_straight_abstraction(&hole_cards, &board_cards).unwrap();
         assert_eq!(abstraction.bucketed_high_card, Rank::Queen); // rounded
         assert_eq!(abstraction.cards_in_straight, 5);
-        assert_eq!(abstraction.requires_gutshot, false);
+        assert!(!abstraction.requires_gutshot);
     }
 
     #[test]
@@ -273,7 +273,7 @@ mod straight_abstraction_tests {
         let abstraction = get_straight_abstraction(&hole_cards, &board_cards).unwrap();
         assert_eq!(abstraction.bucketed_high_card, Rank::Five);
         assert_eq!(abstraction.cards_in_straight, 4);
-        assert_eq!(abstraction.requires_gutshot, false);
+        assert!(!abstraction.requires_gutshot);
     }
 
     #[test]
@@ -339,7 +339,7 @@ mod straight_abstraction_tests {
         let abstraction = get_straight_abstraction(&hole_cards, &board_cards).unwrap();
         assert_eq!(abstraction.bucketed_high_card, Rank::Five);
         assert_eq!(abstraction.cards_in_straight, 5);
-        assert_eq!(abstraction.requires_gutshot, false);
+        assert!(!abstraction.requires_gutshot);
     }
 
     #[test]
@@ -371,7 +371,7 @@ mod straight_abstraction_tests {
         let abstraction = get_straight_abstraction(&hole_cards, &board_cards).unwrap();
         assert_eq!(abstraction.bucketed_high_card, Rank::Ace);
         assert_eq!(abstraction.cards_in_straight, 5);
-        assert_eq!(abstraction.requires_gutshot, false);
+        assert!(!abstraction.requires_gutshot);
     }
 
     #[test]
@@ -399,7 +399,7 @@ mod straight_abstraction_tests {
         let abstraction = get_straight_abstraction(&hole_cards, &board_cards).unwrap();
         assert_eq!(abstraction.bucketed_high_card, Rank::Five);
         assert_eq!(abstraction.cards_in_straight, 4);
-        assert_eq!(abstraction.requires_gutshot, true);
+        assert!(abstraction.requires_gutshot);
     }
 
     #[test]
@@ -435,7 +435,7 @@ mod straight_abstraction_tests {
         let abstraction = get_straight_abstraction(&hole_cards, &board_cards).unwrap();
         assert_eq!(abstraction.bucketed_high_card, Rank::Queen);
         assert_eq!(abstraction.cards_in_straight, 4);
-        assert_eq!(abstraction.requires_gutshot, true);
+        assert!(abstraction.requires_gutshot);
     }
 
     #[test]
@@ -552,7 +552,7 @@ mod straight_abstraction_tests {
             .expect("Expected abstraction to be generated");
         assert_eq!(abstraction.bucketed_high_card, Rank::Queen);
         assert_eq!(abstraction.cards_in_straight, 5);
-        assert_eq!(abstraction.requires_gutshot, false);
+        assert!(!abstraction.requires_gutshot);
     }
 }
 
@@ -579,7 +579,7 @@ impl Display for FlushAbstraction {
 
 impl FlushAbstraction {
     pub fn serialise(&self) -> u8 {
-        (self.flush_score << 2) | self.cards_to_draw + 1 // +1 to avoid parity with None
+        (self.flush_score << 2) | (self.cards_to_draw + 1) // +1 to avoid parity with None
     }
 
     pub fn deserialise(serialised: &u8) -> FlushAbstraction {
@@ -601,7 +601,7 @@ pub fn get_flush_abstraction(
     hole_cards: &[Card; 2],
     board_cards: &[Card],
 ) -> Option<FlushAbstraction> {
-    if board_cards.len() == 0 {
+    if board_cards.is_empty() {
         return None;
     }
 
@@ -877,7 +877,7 @@ pub fn get_connected_card_abstraction(
     hole_cards: &[Card; 2],
     board_cards: &[Card],
 ) -> Option<ConnectedCardsAbstraction> {
-    if board_cards.len() == 0 {
+    if board_cards.is_empty() {
         return None;
     }
     let mut rank_counts = [0u8; 13];
@@ -915,7 +915,7 @@ pub fn get_connected_card_abstraction(
             _ => {}
         }
         if rank_counts[i] > 1 {
-            if (rank_count == 5) {
+            if rank_count == 5 {
                 println!("Five of a kind! {:?}, {:?}", hole_cards, board_cards);
             }
             counts[rank_count as usize - 2] += 1;

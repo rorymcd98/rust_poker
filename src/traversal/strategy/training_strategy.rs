@@ -54,7 +54,7 @@ impl Strategy for TrainingStrategy {
 
     fn from_existing_strategy(actions: usize, strategy: [f64; DEFAULT_ACTION_COUNT]) -> Self {
         TrainingStrategy {
-            actions: actions,
+            actions,
             strategy_sum: strategy,
             regrets_sum: [0f64; DEFAULT_ACTION_COUNT],
         }

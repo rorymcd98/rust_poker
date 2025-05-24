@@ -1,5 +1,7 @@
 #[allow(dead_code)]
 pub mod action;
+#[deprecated = "Use GameAbstraction instead as it allows a much more reduced game state which is feasible to traverse"]
+#[allow(deprecated)]
 #[allow(dead_code)]
 pub mod action_history;
 

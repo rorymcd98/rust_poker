@@ -1,2 +1,2 @@
 #[cfg(test)]
-pub mod misc_tests;
+pub mod unique_cards_tests;

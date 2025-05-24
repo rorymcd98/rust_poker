@@ -5,7 +5,6 @@ use itertools::Itertools;
 use super::generate_tables::generate_flush_table::generate_flushes_table;
 use super::generate_tables::generate_remaining_table::generate_remaining_table;
 use super::generate_tables::generate_unique_five_table::generate_unique_five_table;
-use crate::models::card::{NineCardDeal, new_random_nine_card_game};
 use crate::models::Card;
 use crate::models::Player;
 
@@ -32,6 +31,7 @@ pub fn card_to_id(card: &Card) -> CardId {
     (card.rank.to_bit() << 12) | (card.suit.to_bit() << 8) | prime
 }
 
+#[cfg(test)]
 pub fn id_mask_to_string(id: CardId) -> String {
     let suit = match id & SUIT_MASK {
         0 => "S",
@@ -49,6 +49,7 @@ pub fn id_mask_to_string(id: CardId) -> String {
     mask_string + suit
 }
 
+#[cfg(test)]
 fn rank_bits_to_string(rank_bits: u16) -> String {
     let rank = match rank_bits {
         0 => "",
@@ -70,6 +71,7 @@ fn rank_bits_to_string(rank_bits: u16) -> String {
     rank.to_string()
 }
 
+#[cfg(test)]
 pub fn prime_product_to_rank_string(mut product: usize) -> String {
     let mut rank_string = String::new();
     let primes = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41];
@@ -274,10 +276,7 @@ impl HandEvaluator for HandEvaluatorLookup {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        evaluate::generate_tables::remaining_hand_types::{classify_hand_type, HandType},
-        models::card::{Rank, Suit},
-    };
+    use crate::models::card::{new_random_nine_card_game, NineCardDeal, Rank, Suit};
     use itertools::Itertools;
     use lazy_static::lazy_static;
     use rand::seq::SliceRandom;

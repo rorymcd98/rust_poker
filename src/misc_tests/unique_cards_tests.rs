@@ -1,7 +1,5 @@
 use itertools::Itertools;
 
-use crate::models::card::Rank;
-
 use crate::models::Card;
 use crate::traversal::{main_train::get_unique_cards, strategy::strategy_branch::StrategyHubKey};
 

@@ -5,7 +5,6 @@ use itertools::Itertools;
 use crate::config::NUM_THREADS;
 use crate::traversal::action_history::action::DEFAULT_ACTION_COUNT;
 use crate::models::Card;
-use crate::traversal::strategy::strategy_hub;
 use super::play_strategy::PlayStrategy;
 use super::strategy_branch::{StrategyBranch, StrategyHubKey};
 use super::strategy_trait::Strategy;
@@ -23,6 +22,7 @@ pub struct StrategyPair<TStrategy: Strategy> {
 
 /// A hub for storing a list of randomised strategy keys which can be used for training iterations
 /// It attempts to generate an unbiased list of keys such that the number of un/suited, and pocket-pair hands are realistic
+/// We store StrategyBranches which are keyed based on their "hole card & blind" combo, to minimise contention, and conflicts while training
 /// N.B - The current implementation is not that efficient, and will fail at threads counts close to 26 
 #[derive(Debug)]
 pub struct StrategyHub<TStrategy: Strategy + Debug> {
@@ -357,7 +357,7 @@ pub fn deserialise_strategy_hub<TStrategy: Strategy + Debug + Send + Sync + 'sta
     let strategy_hub_map = Arc::try_unwrap(strategy_hub_map).unwrap();
     let strategy_hub_map: HashMap<StrategyHubKey, StrategyBranch<TStrategy>> = strategy_hub_map.into_iter().collect();
 
-    if strategy_hub_map.len() == 0 {
+    if strategy_hub_map.is_empty() {
         return Err(io::Error::new(io::ErrorKind::InvalidData, "No strategy hub elements found"));
     }
 

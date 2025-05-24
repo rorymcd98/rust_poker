@@ -1,13 +1,11 @@
 mod evaluate;
-
-mod models;
-pub use models::Card;
-pub use models::Suit;
-
 mod traversal;
-
 mod thread_utils;
-
-pub mod config;
+mod models;
+mod subgame_solver;
+mod config;
+mod misc_tests;
 
 pub mod validation;
+pub use traversal::main_train::begin_tree_train_traversal;
+pub use subgame_solver::solve::solve_cbr_utilties2;

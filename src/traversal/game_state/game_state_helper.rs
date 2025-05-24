@@ -25,9 +25,9 @@ pub struct GameStateHelper {
     pub current_player: Cell<Player>,
     pub small_blind_player: Player,
     pub big_blind_player: Player,
-    pub bets_this_round: Cell<u8>,
+    pub bets_this_street: Cell<u8>,
     pub winner: Option<Player>,
-    pub checks_this_round: Cell<u8>,
+    pub checks_this_street: Cell<u8>,
 }
 
 impl GameStateHelper {
@@ -49,9 +49,9 @@ impl GameStateHelper {
             current_player: Cell::new(small_blind_player),
             small_blind_player,
             big_blind_player: small_blind_player.get_opposite(),
-            bets_this_round: Cell::new(0),
+            bets_this_street: Cell::new(0),
             winner: EVALUATOR.evaluate_nine(&nine_card_deal),
-            checks_this_round: Cell::new(0),
+            checks_this_street: Cell::new(0),
         }
     }
 
@@ -64,28 +64,12 @@ impl GameStateHelper {
             .set(self.current_player.get().get_opposite());
     }
 
-    pub fn set_current_player_to_small_blind(&self) {
-        self.current_player.set(self.small_blind_player);
-    }
-
     pub fn set_current_player_to_big_blind(&self) {
         self.current_player.set(self.big_blind_player);
     }
 
-    pub fn get_flop(&self) -> [Card; 3] {
-        [self.cards[4], self.cards[5], self.cards[6]]
-    }
-
     pub fn is_preflop(&self) -> bool {
         self.cards_dealt.get() == 0
-    }
-
-    pub fn is_flop(&self) -> bool {
-        self.cards_dealt.get() == 3
-    }
-
-    pub fn is_turn(&self) -> bool {
-        self.cards_dealt.get() == 4
     }
 
     pub fn is_river(&self) -> bool {
@@ -96,7 +80,7 @@ impl GameStateHelper {
         if self.get_current_player_pot() == 1 {
             return 3; // we're preflop
         }
-        match self.bets_this_round.get() {
+        match self.bets_this_street.get() {
             0 => 2,
             MAX_RAISES => 2,
             _ => 3,
@@ -110,6 +94,7 @@ impl GameStateHelper {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_non_current_player_cards(&self) -> [Card; 2] {
         match self.current_player.get() {
             Player::Opponent => [self.cards[0], self.cards[1]],
@@ -121,38 +106,36 @@ impl GameStateHelper {
         self.game_abstraction.get_abstraction(
             (self.cards_dealt.get()).saturating_sub(2) as usize,
             self.get_current_player_pot(),
-            self.bets_this_round.get(),
+            self.bets_this_street.get(),
             &self.current_player.get(),
         )
     }
 
     // TODO - massively refactor this method
-    pub fn check_round_terminal(&self) -> TerminalState {
-        if self.checks_this_round.get() == 2 {
-            return if self.is_river() {TerminalState::Showdown} else {TerminalState::RoundOver};
+    pub fn check_street_terminal(&self) -> TerminalState {
+        if self.checks_this_street.get() == 2 {
+            return if self.is_river() {TerminalState::Showdown} else {TerminalState::StreetOver};
         }
 
         let terminal_state = if self.opponent_pot.get() == self.traverser_pot.get() {
-            // If the pots are equal and there have been bets then this is a showdown / round over
-            if self.bets_this_round.get() > 0 {
+            // If the pots are equal and there have been bets then this is a showdown / street over
+            if self.bets_this_street.get() > 0 {
                 TerminalState::Showdown
             } else {
                 // Otherwise its the first action
                 TerminalState::None
             }
+        } else if self.get_current_player_pot() < self.get_non_current_player_pot() {
+            // If the pots are unequal and we have less in the pot, then it's our turn
+            TerminalState::None
         } else {
-            if self.get_current_player_pot() < self.get_non_current_player_pot() {
-                // If the pots are unequal and we have less in the pot, then it's our turn
-                TerminalState::None
-            } else {
-                // Otherwise the opponent just folded
-                TerminalState::Fold
-            }
+            // Otherwise the opponent just folded
+            TerminalState::Fold
         };
         if !self.is_river() {
             match terminal_state {
                 TerminalState::Fold => TerminalState::Fold,
-                TerminalState::Showdown => TerminalState::RoundOver,
+                TerminalState::Showdown => TerminalState::StreetOver,
                 _ => TerminalState::None,
             }
         } else {
@@ -179,7 +162,7 @@ impl GameStateHelper {
     }
 
     pub fn bet(&self) -> Action {
-        self.bets_this_round.set(self.bets_this_round.get() + 1);
+        self.bets_this_street.set(self.bets_this_street.get() + 1);
         let raise = if self.is_preflop() {
             BIG_BLIND
         } else {
@@ -193,7 +176,7 @@ impl GameStateHelper {
                 self.opponent_pot.set(self.traverser_pot.get() + raise);
             }
         };
-        return Action::Bet;
+        Action::Bet
     }
 
     pub fn get_current_player_pot(&self) -> u8 {
@@ -214,8 +197,8 @@ impl GameStateHelper {
         if self.get_current_player_pot() == SMALL_BLIND {
             return self.call();
         }
-        match self.bets_this_round.get() {
-            0 => self.bet(), // Handles the start of betting rounds
+        match self.bets_this_street.get() {
+            0 => self.bet(), // Handles the start of betting streets
             _ => self.call(),
         }
     }
@@ -232,12 +215,12 @@ impl GameStateHelper {
                 self.opponent_pot.set(self.traverser_pot.get());
             }
         };
-        return Action::Call;
+        Action::Call
     }
 
     pub fn checkfold(&self) {
-        if self.bets_this_round.get() == 0 {
-            self.checks_this_round.set(self.checks_this_round.get() + 1);
+        if self.bets_this_street.get() == 0 {
+            self.checks_this_street.set(self.checks_this_street.get() + 1);
         }
     }
 
@@ -257,43 +240,44 @@ impl GameStateHelper {
                 self.opponent_pot.set(previous_pot);
             }
         };
-        self.bets_this_round.set(previous_bets);
+        self.bets_this_street.set(previous_bets);
         self.current_player.set(acting_player);
-        self.checks_this_round.set(previous_checks); // TODO - think of a more optimal way to determine checks
+        self.checks_this_street.set(previous_checks); // TODO - think of a more optimal way to determine checks
     }
 
     // implement deal and undeal
     pub fn deal(&self) {
         self.cards_dealt.set(self.cards_dealt.get() + 1);
-        self.checks_this_round.set(0);
-        self.bets_this_round.set(0);
+        self.checks_this_street.set(0);
+        self.bets_this_street.set(0);
         self.set_current_player_to_big_blind();
     }
 
     pub fn undeal(&self, previous_bets: u8, previous_player: Player, previous_checks: u8) {
         self.cards_dealt.set(self.cards_dealt.get() - 1);
-        self.bets_this_round.set(previous_bets);
+        self.bets_this_street.set(previous_bets);
         self.current_player.set(previous_player);
-        self.checks_this_round.set(previous_checks);
+        self.checks_this_street.set(previous_checks);
     }
 
     pub fn deal_flop(&self) {
         self.cards_dealt.set(3);
-        self.bets_this_round.set(0);
-        self.checks_this_round.set(0);
+        self.bets_this_street.set(0);
+        self.checks_this_street.set(0);
         self.set_current_player_to_big_blind();
     }
 
     pub fn undeal_flop(&self, previous_bets: u8, previous_player: Player, previous_checks: u8) {
         self.cards_dealt.set(0);
-        self.bets_this_round.set(previous_bets);
+        self.bets_this_street.set(previous_bets);
         self.current_player.set(previous_player);
-        self.checks_this_round.set(previous_checks);
+        self.checks_this_street.set(previous_checks);
     }
 
+    #[allow(dead_code)]
     pub fn to_string(&self) -> String{
         format!(
-            "Current state: Player Cards: {} Cards dealt: {} Current player: {}\nTraverser pot: {} Opponent pot: {} Bets this round: {} Checks this round: {}",
+            "Current state: Player Cards: {} Cards dealt: {} Current player: {}\nTraverser pot: {} Opponent pot: {} Bets this street: {} Checks this street: {}",
             cards_string(&self.get_current_player_cards()),
             {
                 cards_string(&self.cards[4..4+self.cards_dealt.get() as usize])
@@ -301,8 +285,8 @@ impl GameStateHelper {
             self.get_current_player(),
             self.traverser_pot.get(),
             self.opponent_pot.get(),
-            self.bets_this_round.get(),
-            self.checks_this_round.get()
+            self.bets_this_street.get(),
+            self.checks_this_street.get()
         )
     }
 }

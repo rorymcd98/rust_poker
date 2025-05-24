@@ -1,5 +1,4 @@
 use rand::seq::SliceRandom;
-use rand::Rng;
 use crate::config::*;
 use super::game_state::game_state_helper::GameStateHelper;
 use super::game_state::terminal_state::TerminalState;
@@ -28,7 +27,7 @@ pub fn begin_tree_train_traversal() {
     }
 
     for handle in handles {
-        let _ = handle.join().unwrap();
+        handle.join().unwrap();
     }
 
     let strategy_hub: StrategyHub<TrainingStrategy> = Arc::try_unwrap(strategy_hub).expect("Arc has more than one strong reference");
@@ -164,14 +163,14 @@ fn create_new_all_cards_strategy_hub() -> StrategyHub<TrainingStrategy> {
     let sb_elements = get_all_combos_by_blind(true);
     let bb_elements = sb_elements.clone().into_iter().map(|element| StrategyHubKey{is_sb: false, ..element}).collect::<Vec<StrategyHubKey>>();
 
-    let strategy_hub = StrategyHub::new(
+    
+    StrategyHub::new(
         bb_elements
             .into_iter()
-            .chain(sb_elements.into_iter())
-            .map(|key| StrategyBranch::new(key))
+            .chain(sb_elements)
+            .map(StrategyBranch::new)
             .collect()
-    );
-    strategy_hub
+    )
 }
 
 struct TrainingBranchTraverser<'a> {
@@ -201,10 +200,10 @@ impl<'a> TrainingBranchTraverser<'a> {
     }
 
     fn traverse_action(&mut self) -> f64 {
-        match self.game_state.check_round_terminal() {
+        match self.game_state.check_street_terminal() {
             TerminalState::Showdown => return self.game_state.evaluate_showdown(),
             TerminalState::Fold => return self.game_state.evaluate_fold(),
-            TerminalState::RoundOver => {
+            TerminalState::StreetOver => {
                 if self.game_state.is_preflop() {
                     return self.traverse_flop();
                 }
@@ -216,16 +215,16 @@ impl<'a> TrainingBranchTraverser<'a> {
         let num_available_actions = self.game_state.get_num_available_actions();
 
         let pot_before_action = self.game_state.get_current_player_pot();
-        let bets_before_action = self.game_state.bets_this_round.get();
+        let bets_before_action = self.game_state.bets_this_street.get();
         let previous_player = self.game_state.current_player.get();
-        let checks_before = self.game_state.checks_this_round.get();
+        let checks_before = self.game_state.checks_this_street.get();
 
         let training_iteration = self.training_iteration;
 
         let strategy = self.get_strategy();
         let current_strategy = strategy.get_current_strategy(training_iteration);
 
-        if self.game_state.current_player.get().is_opponent() {
+        if self.game_state.current_player.get() == Player::Opponent {
             let sampled_action = sample_strategy(&current_strategy, num_available_actions);
             self.traverse_chosen_action(sampled_action, previous_player, pot_before_action, bets_before_action, checks_before)
         } else {
@@ -265,8 +264,8 @@ impl<'a> TrainingBranchTraverser<'a> {
 
     fn traverse_flop(&mut self) -> f64 {
         let previous_player = self.game_state.current_player.get();
-        let previous_bets = self.game_state.bets_this_round.get();
-        let check_before = self.game_state.checks_this_round.get();
+        let previous_bets = self.game_state.bets_this_street.get();
+        let check_before = self.game_state.checks_this_street.get();
         self.game_state.deal_flop();
         let utility = self.traverse_action();
         self.game_state
@@ -276,8 +275,8 @@ impl<'a> TrainingBranchTraverser<'a> {
 
     fn traverse_deal(&mut self) -> f64 {
         let previous_player = self.game_state.current_player.get();
-        let previous_bets = self.game_state.bets_this_round.get();
-        let checks_before = self.game_state.checks_this_round.get();
+        let previous_bets = self.game_state.bets_this_street.get();
+        let checks_before = self.game_state.checks_this_street.get();
         self.game_state.deal();
         let utility = self.traverse_action();
         self.game_state

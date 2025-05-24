@@ -31,8 +31,8 @@ mod tests {
     fn evaluate_fives(hand: &[Card]) -> u16 {
         let hand = hand_to_id(hand);
         let rank_mask = unique_rank_mask(&hand);
-        let evaluation = FIVE_UNIQUES_MAP[rank_mask as usize];
-        evaluation
+        
+        FIVE_UNIQUES_MAP[rank_mask as usize]
     }
 
     // A test to show the hand evaluation and board evaluation order doesn't mattter
@@ -47,7 +47,7 @@ mod tests {
         }
     }
 
-    fn compare_fives(hand1: &Vec<Card>, hand2: &Vec<Card>, ord: std::cmp::Ordering) {
+    fn compare_fives(hand1: &Vec<Card>, hand2: &[Card], ord: std::cmp::Ordering) {
         if hand1.iter().unique().count() != 5 || hand2.iter().unique().count() != 5 {
             panic!("Hands must have 5 unique cards");
         };

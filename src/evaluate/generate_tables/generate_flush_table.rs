@@ -7,9 +7,6 @@ use crate::models::Suit;
 use itertools::Itertools;
 use std::collections::HashMap;
 
-pub const NON_STRAIGHT_COUNT: usize = 1277; // The number of hands consisting of 5 unique cards which are not straights
-pub const STRAIGHT_COUNT: usize = 10;
-
 pub fn generate_all_unique_rank_combos(num_cards: usize) -> Vec<Vec<Card>> {
     let ranks = (0..13).collect::<Vec<u8>>();
     let mut combos = Vec::new();
@@ -26,11 +23,15 @@ pub fn generate_all_unique_rank_combos(num_cards: usize) -> Vec<Vec<Card>> {
 }
 
 #[cfg(test)]
+pub const NON_STRAIGHT_COUNT: usize = 1277; // The number of hands consisting of 5 unique cards which are not straights
+#[cfg(test)]
+pub const STRAIGHT_COUNT: usize = 10;
+
+#[cfg(test)]
 mod uniques_generation_test {
     use crate::evaluate::evaluate_hand::hand_to_id;
 
     use super::*;
-
     #[test]
     fn test_generate_all_unique_rank_combos() {
         let combos = generate_all_unique_rank_combos(5);
@@ -292,10 +293,10 @@ mod flush_tests {
     }
 
     fn evaluate_flush(hand: &[Card]) -> u16 {
-        let hand = hand_to_id(&hand);
+        let hand = hand_to_id(hand);
         let rank_mask = unique_rank_mask(&hand);
-        let evaluation = FLUSHES_MAP[rank_mask as usize];
-        evaluation
+        
+        FLUSHES_MAP[rank_mask as usize]
     }
 
     // A test to show the hand evaluation and board evaluation order doesn't mattter

@@ -1,9 +1,9 @@
-use core::str;
 use std::{collections::HashMap, fmt::Display};
-use crate::{models::card::Rank, traversal::action_history::game_abstraction::{to_string_game_abstraction, GameAbstractionSerialised}};
+use crate::{models::card::Rank, traversal::action_history::game_abstraction::GameAbstractionSerialised};
 
 use super::strategy_trait::Strategy;
 
+/// The key to access a particular entry / branch in the StrategyHub
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Default, Clone, Debug)]
 pub struct StrategyHubKey {
     pub low_rank: Rank,
@@ -25,6 +25,7 @@ impl Display for StrategyHubKey {
     }
 }
 
+/// A branch of the strategy hub containing all of the abstract strategy for a given "hole card & blind" combo
 #[derive(Debug, Default)]
 pub struct StrategyBranch<TStrategy> {
     pub strategy_hub_key: StrategyHubKey,

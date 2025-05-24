@@ -1,19 +1,16 @@
-use std::{fmt::Display};
+use std::fmt::Display;
 
 const TRAVERSER_BYTE: u8 = 0b10000000;
 const OPPONENT_BYTE: u8 = 0b01000000;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Default)]
 pub enum Player {
+    #[default]
     Traverser,
     Opponent,
 }
 
-impl Default for Player {
-    fn default() -> Self {
-        Player::Traverser
-    }
-}
 
 impl Display for Player {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -25,6 +22,7 @@ impl Display for Player {
 }
 
 impl Player {
+    #[allow(dead_code)]
     pub fn serialise(&self) -> u8 {
         match self {
             Player::Traverser => TRAVERSER_BYTE,
@@ -32,25 +30,12 @@ impl Player {
         }
     }
 
+    #[allow(dead_code)]
     pub fn deserialise(byte: &u8) -> Player {
         match *byte {
             TRAVERSER_BYTE => Player::Traverser,
             OPPONENT_BYTE => Player::Opponent,
             _ => panic!("Invalid byte for player deserialisation"),
-        }
-    }
-
-    pub fn is_traverser(&self) -> bool {
-        match self {
-            Player::Traverser => true,
-            _ => false,
-        }
-    }
-
-    pub fn is_opponent(self) -> bool {
-        match self {
-            Player::Opponent => true,
-            _ => false,
         }
     }
 

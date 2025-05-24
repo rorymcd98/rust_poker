@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::{evaluate::generate_tables::remaining_hand_types::HandType, models::card::{Card, Rank}};
+use crate::models::card::Card;
 
 use super::{
     board_abstraction::BoardAbstraction,

@@ -1,15 +1,16 @@
 use crate::{
     models::{
-        card::{NineCardDeal, Rank},
+        card::{NineCardDeal, Rank, Card},
         Player,
     },
-    traversal::action_history::card_round_abstraction::CardRoundAbstraction, Card,
+    traversal::action_history::card_round_abstraction::CardRoundAbstraction,
 };
 
 use super::card_round_abstraction::CardRoundAbstractionSerialised;
 
 pub type GameAbstractionSerialised = Vec<u8>;
 
+#[allow(dead_code)]
 pub fn to_string_game_abstraction(hole1: Rank, hole2: Rank, suited: bool, is_sb: bool, abstraction: &GameAbstractionSerialised) -> String {
     let round = abstraction[0];
     let game_pot = abstraction[1];
@@ -105,7 +106,7 @@ pub fn get_current_abstraction(hole_cards: &(Card, Card), board_cards: &Vec<Card
 }
 
 fn convert_cards_into_card_abstraction(hole_cards: &(Card, Card), board_cards: &Vec<Card>) -> CardRoundAbstractionSerialised {
-    CardRoundAbstraction::new(&[hole_cards.0, hole_cards.1], &board_cards).serialise()
+    CardRoundAbstraction::new(&[hole_cards.0, hole_cards.1], board_cards).serialise()
 }
 
 pub fn convert_deal_into_abstraction(deal: NineCardDeal) -> GameAbstraction {

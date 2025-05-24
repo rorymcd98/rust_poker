@@ -136,7 +136,6 @@ pub fn validate_history(history: &Vec<Action>) {
 
 /// A live record of the game state that also acts as a key to the various strategies
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[deprecated = "Use GameAbstraction instead as it allows a much more reduced game state which is feasible to traverse"]
 pub struct ActionHistory {
     pub history: Vec<Action>,
 }
@@ -309,11 +308,12 @@ impl Iterator for ActionHistoryByteStreamIterator<'_> {
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod tests {
     use crate::models::card::{Card, Rank, Suit};
 
     use super::*;
-    use rstest::rstest;
+    
 
     fn validate_history(history: Vec<Action>) {
         let action_history = ActionHistory::new(history);

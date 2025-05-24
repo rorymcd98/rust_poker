@@ -8,6 +8,7 @@ use std::{
 /// A 9 card deal, 2 for traverser, 2 for opponent, 5 for board
 pub type NineCardDeal = [Card; 9];
 
+#[allow(dead_code)]
 /// Returns a string representation of a 9 card deal
 pub fn deal_string(deal: &NineCardDeal) -> String {
     format!(
@@ -48,6 +49,7 @@ pub fn new_random_nine_card_game_with(
     res
 }
 
+#[cfg(test)]
 /// Returns a new random 9 card game
 pub fn new_random_nine_card_game() -> NineCardDeal {
     let mut taken = [false; 52];
@@ -254,12 +256,12 @@ impl Rank {
 
 /// Returns all possible rank combinations for an unpaired hand
 pub fn all_rank_combos() -> Vec<(Rank, Rank)> {
-    (0..13).into_iter().combinations(2).map(|c| (Rank::from_int(c[0]), Rank::from_int(c[1]))).collect()
+    (0..13).combinations(2).map(|c| (Rank::from_int(c[0]), Rank::from_int(c[1]))).collect()
 }
 
 /// Returns all possible pocket pairs ranks
 pub fn all_pocket_pairs() -> Vec<(Rank, Rank)> {
-    (0..13).into_iter().map(|c| (Rank::from_int(c), Rank::from_int(c))).collect()
+    (0..13).map(|c| (Rank::from_int(c), Rank::from_int(c))).collect()
 }
 
 /// A card
@@ -300,18 +302,13 @@ impl Card {
         self.suit.to_int() * 13 + self.rank.to_int()
     }
 
-    pub fn from_ints(suit: u8, rank: u8) -> Card {
-        Card {
-            suit: Suit::from_int(suit),
-            rank: Rank::from_int(rank),
-        }
-    }
-
+    #[allow(dead_code)]
     fn new_random_card() -> Card {
         let card_int = with_rng(|rng| rng.gen_range(0..52));
         Card::from_int(card_int)
     }
 
+    #[cfg(test)]
     pub fn new_random_cards(num_cards: usize) -> Vec<Card> {
         let mut taken = [false; 52];
         let mut res = Vec::with_capacity(num_cards);
@@ -328,12 +325,14 @@ impl Card {
         res
     }
 
+    #[allow(dead_code)]
     fn serialise_int(card_int: u8) -> u8 {
         let suit = card_int / 13;
         let rank = card_int % 13;
         (suit << 4) | rank
     }
 
+    #[allow(dead_code)]
     pub fn get_n_more_cards(existing_cards: &[Card], n: usize) -> Vec<Card> {
         let mut taken = [false; 52];
         for card in existing_cards {
@@ -353,6 +352,7 @@ impl Card {
         res
     }
 
+    #[allow(dead_code)]
     pub fn get_one_more_card(existing_cards: &Vec<Card>) -> Card {
         let mut taken = [false; 52];
         for card in existing_cards {
@@ -401,6 +401,7 @@ impl Card {
         Card::new(suit, rank)
     }
 
+    #[allow(dead_code)]
     pub fn all_suited_combos_vs_hole_cards(
         hole_cards: (Card, Card),
         suit: Suit,
@@ -408,6 +409,7 @@ impl Card {
         Self::all_suited_combos(suit).map(move |(a, b)| (hole_cards, (a, b)))
     }
 
+    #[allow(dead_code)]
     pub fn all_suited_combos(suit: Suit) -> impl Iterator<Item = (Card, Card)> {
         (0..12).flat_map(move |first_rank| {
             ((first_rank + 1)..13).map({
@@ -422,6 +424,7 @@ impl Card {
         })
     }
 
+    #[allow(dead_code)]
     pub fn all_offsuit_combos(
         first_suit: Suit,
         second_suit: Suit,
@@ -518,7 +521,7 @@ mod tests {
         for i in 0..52 {
             let card = Card::from_int(i);
             assert!(!seen.contains(&card));
-            seen.insert(card.clone());
+            seen.insert(card);
             assert_eq!(card.to_int(), i);
         }
     }
@@ -526,13 +529,6 @@ mod tests {
     #[test]
     fn test_card_new() {
         let card = Card::new(Suit::Spades, Rank::Ace);
-        assert_eq!(card.suit, Suit::Spades);
-        assert_eq!(card.rank, Rank::Ace);
-    }
-
-    #[test]
-    fn test_card_from_ints() {
-        let card = Card::from_ints(0, 12);
         assert_eq!(card.suit, Suit::Spades);
         assert_eq!(card.rank, Rank::Ace);
     }
@@ -626,7 +622,6 @@ mod tests {
     fn all_suited_hole_card_combos() {
         // are unique, there are 78 of them, they are all sorted, they are all the same suit
         let combos = Card::all_suited_combos(Suit::Spades)
-            .into_iter()
             .collect::<Vec<_>>();
         assert_eq!(combos.len(), 12 * 13 / 2);
         let mut seen = HashSet::new();
@@ -645,14 +640,12 @@ mod tests {
         assert!(Card::new(Suit::Spades, Rank::Two) < Card::new(Suit::Hearts, Rank::Two));
         assert!(Card::new(Suit::Hearts, Rank::Two) < Card::new(Suit::Spades, Rank::Three));
 
-        let mut cards = vec![
-            Card::new(Suit::Spades, Rank::Two),
+        let cards = [Card::new(Suit::Spades, Rank::Two),
             Card::new(Suit::Hearts, Rank::Two),
             Card::new(Suit::Spades, Rank::Three),
             Card::new(Suit::Hearts, Rank::Three),
             Card::new(Suit::Spades, Rank::Ace),
-            Card::new(Suit::Hearts, Rank::Ace),
-        ];
+            Card::new(Suit::Hearts, Rank::Ace)];
         assert!(cards.is_sorted());
     }
 }

@@ -1,6 +1,5 @@
-use crate::traversal::action_history::action::{self, DEFAULT_ACTION_COUNT};
-
-use super::{strategy_trait::Strategy, training_strategy::{self, TrainingStrategy}};
+use crate::traversal::action_history::action::DEFAULT_ACTION_COUNT;
+use super::{strategy_trait::Strategy, training_strategy::TrainingStrategy};
 
 /// A strategy used at runtime for playing / evaluating a game
 #[derive(Debug, Clone)]
@@ -19,7 +18,7 @@ impl Strategy for PlayStrategy {
         play_strategy[0] = 1.0; // TODO - Assess if this at all likely
         PlayStrategy { actions: 0, play_strategy}
     }
-    
+
     fn get_current_strategy(&self, _iteration: usize) -> [f64; DEFAULT_ACTION_COUNT] {
         self.play_strategy
     }
@@ -53,9 +52,5 @@ impl PlayStrategy {
             }
         };
         PlayStrategy { actions: train_strategy.actions, play_strategy: return_strategy }
-    }
-
-    pub fn serialise(&self) -> Vec<f64> {
-        self.play_strategy.to_vec()
     }
 }

@@ -2,31 +2,26 @@ use core::panic;
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
-use std::hash::{Hash, Hasher};
 use std::{u16, vec};
 
 use dashmap::DashMap;
-use indicatif::{ParallelProgressIterator, ProgressBar, ProgressIterator, ProgressStyle};
+use indicatif::{ParallelProgressIterator, ProgressBar, ProgressStyle};
 use itertools::Itertools;
-use rand::seq::SliceRandom;
-use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator};
-use rust_poker::config::{BIG_BLIND, BLUEPRINT_FOLDER};
+use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
+use crate::config::{BIG_BLIND, BLUEPRINT_FOLDER};
 
 use crate::evaluate::evaluate_hand::HandEvaluator;
-use crate::models::card::{self, NineCardDeal, Rank};
+use crate::models::card::{NineCardDeal, Rank};
 use crate::models::{Card, Player, Suit};
-use crate::thread_utils::with_rng;
-use crate::traversal::action_history::action::{self, Action, DEFAULT_ACTION_COUNT};
+use crate::traversal::action_history::action::{Action, DEFAULT_ACTION_COUNT};
 use crate::traversal::action_history::card_round_abstraction::CardRoundAbstractionSerialised;
-use crate::traversal::action_history::game_abstraction::{self, convert_deal_into_abstraction, get_current_abstraction, to_string_game_abstraction, GameAbstraction, GameAbstractionSerialised};
+use crate::traversal::action_history::game_abstraction::{get_current_abstraction, GameAbstraction, GameAbstractionSerialised};
 use crate::traversal::game_state::game_state_helper::{GameStateHelper, EVALUATOR};
 use crate::traversal::game_state::terminal_state::TerminalState;
-use crate::traversal::main_train::{get_all_combos_by_blind, get_unique_cards};
 use crate::traversal::strategy::play_strategy::PlayStrategy;
 use crate::traversal::strategy::strategy_branch::{StrategyBranch, StrategyHubKey};
-use crate::traversal::strategy::strategy_hub::{deserialise_strategy_hub, StrategyHub};
+use crate::traversal::strategy::strategy_hub::deserialise_strategy_hub;
 use crate::traversal::strategy::strategy_trait::Strategy;
-use std::time::Instant;
 
 #[derive(Clone)]
 struct GameTreePath {
@@ -100,7 +95,7 @@ pub fn solve_cbr_utilties2() {
 
     
     let sb_player = Player::Opponent;
-    let game_state = &mut convert_actions_to_game_state(&action_history, sb_player);
+    let game_state = &mut convert_actions_to_game_state(action_history, sb_player);
 
     let mut tree_builder = CbvSubTree {
         strategy_map: &strategy_map,
@@ -188,6 +183,7 @@ impl HoleCardReaches {
 }
 
 #[derive(Clone)]
+#[derive(Default)]
 struct HoleCardPayoffs {
     pub traverser_payoffs: HashMap<(Card, Card), f64>,
 }
@@ -279,18 +275,11 @@ impl HoleCardPayoffs {
     }
 }
 
-impl Default for HoleCardPayoffs {
-    fn default() -> Self {
-        Self {
-            traverser_payoffs: HashMap::new(),
-        }
-    }
-}
 
 impl Display for HoleCardPayoffs {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for (hole_card, payoff) in self.traverser_payoffs.iter() {
-            writeln!(f, "{:?} {}", hole_card, payoff);
+        for (hole_card, payoff) in &self.traverser_payoffs {
+            writeln!(f, "{:?} {}", hole_card, payoff)?;
         }
         Ok(())
     }
@@ -325,7 +314,7 @@ impl<'a> CbvSubTree<'a> {
             }
         }).collect::<Vec<_>>();
 
-        let remaining_cards = (0..52).map(|card_int| Card::from_int(card_int)).filter(|card| !dealt_board_cards.contains(card)).collect::<Vec<_>>();
+        let remaining_cards = (0..52).map(Card::from_int).filter(|card| !dealt_board_cards.contains(card)).collect::<Vec<_>>();
         
         let all_hole_cards = remaining_cards.iter().combinations(2).map(|cards| {
             if cards[0] <= cards[1] {
@@ -387,7 +376,7 @@ impl<'a> CbvSubTree<'a> {
         
         let mut traverser_payoffs = res.traverser_payoffs;
         let mut reaches_sum = 0.0;
-        for (hole_card, payoff) in traverser_payoffs.iter_mut() {
+        for (hole_card, _) in traverser_payoffs.iter_mut() {
             let initial_reach = initial_reaches.get_reach(Player::Traverser, hole_card);
             // println!("{:?} {}, {}, {}", hole_card, initial_reach, payoff, *payoff / initial_reach);
             reaches_sum += initial_reach;
@@ -403,7 +392,7 @@ impl<'a> CbvSubTree<'a> {
         res.traverser_payoffs = traverser_payoffs;
         // println!("{}", res);
 
-        return HashMap::new();
+        HashMap::new()
     }
 
     fn calculate_initial_reaches(&mut self, action_history: &Vec<Action>, traverser_cards: &Vec<(Card, Card)>, opponent_cards: &Vec<(Card, Card)>) -> HoleCardReaches {
@@ -420,7 +409,7 @@ impl<'a> CbvSubTree<'a> {
         for action in action_history {
             let round = (game_state.cards_dealt.get()).saturating_sub(2) as usize;
             let current_player_pot = game_state.get_current_player_pot();
-            let bets_this_round = game_state.bets_this_round.get();
+            let bets_this_round = game_state.bets_this_street.get();
             let num_available_actions = game_state.get_num_available_actions();
             let current_player = game_state.current_player.get();
 
@@ -436,7 +425,7 @@ impl<'a> CbvSubTree<'a> {
                 },
                 Action::Bet => {
                     for hole_cards in all_hole_cards {
-                        let strategy = self.get_strategy(&hole_cards, &current_player, round, current_player_pot, bets_this_round, num_available_actions);
+                        let strategy = self.get_strategy(hole_cards, &current_player, round, current_player_pot, bets_this_round, num_available_actions);
                         let action_probability = strategy[2.min(num_available_actions-1)];
                         reaches.update(current_player, hole_cards,action_probability);
                     } 
@@ -445,7 +434,7 @@ impl<'a> CbvSubTree<'a> {
                 },
                 Action::Call => {
                     for hole_cards in all_hole_cards {
-                        let strategy = self.get_strategy(&hole_cards, &current_player, round, current_player_pot, bets_this_round, num_available_actions);
+                        let strategy = self.get_strategy(hole_cards, &current_player, round, current_player_pot, bets_this_round, num_available_actions);
                         let action_probability = strategy[1];
                         reaches.update(current_player, hole_cards,action_probability);
                     } 
@@ -454,7 +443,7 @@ impl<'a> CbvSubTree<'a> {
                 },
                 Action::CheckFold => {
                     for hole_cards in all_hole_cards {
-                        let strategy = self.get_strategy(&hole_cards, &current_player, round, current_player_pot, bets_this_round, num_available_actions);
+                        let strategy = self.get_strategy(hole_cards, &current_player, round, current_player_pot, bets_this_round, num_available_actions);
                         let action_probability = strategy[0];
                         reaches.update(current_player, hole_cards,action_probability);
                     } 
@@ -475,7 +464,7 @@ impl<'a> CbvSubTree<'a> {
             SolvingState::Exploring => {
                 println!("Inserting");
                 self.subtrees.insert( self.action_history.clone(),CbvSubTree{
-                    strategy_map: &self.strategy_map,
+                    strategy_map: self.strategy_map,
                     action_history: self.action_history.clone(),
                     reaches: reaches.clone_non_zero(),
                     game_state: self.game_state.clone(),
@@ -519,25 +508,25 @@ impl<'a> CbvSubTree<'a> {
         let pot_before_action = self.game_state.get_current_player_pot();
         let current_player = self.game_state.current_player.get();
 
-        match self.game_state.check_round_terminal() {
+        match self.game_state.check_street_terminal() {
             TerminalState::None => {
                 let round = (self.game_state.cards_dealt.get()).saturating_sub(2) as usize;
-                let bets_this_round = self.game_state.bets_this_round.get();
-                let bets_before_action = self.game_state.bets_this_round.get();
+                let bets_this_round = self.game_state.bets_this_street.get();
+                let bets_before_action = self.game_state.bets_this_street.get();
                 let previous_player = self.game_state.current_player.get();
-                let checks_before = self.game_state.checks_this_round.get();
+                let checks_before = self.game_state.checks_this_street.get();
 
                 //// Here we're calculating CBV as described in Safe and Nested Subgame Solving for Imperfect-Information Games
                 self.perform_action(reaches.clone_non_zero(), num_available_actions, current_player, round, bets_this_round, pot_before_action, bets_before_action, previous_player, checks_before, depth-1)
             },
-            TerminalState::RoundOver => {
+            TerminalState::StreetOver => {
                 self.traverse_deal(reaches, 0)
             },
             TerminalState::Fold => {
                 println!("Folding");
                 match self.solving_state {
                     SolvingState::Solving => {
-                        self.evaluate_fold(&reaches, &current_player, self.game_state.traverser_pot.get(), self.game_state.opponent_pot.get())
+                        self.evaluate_fold(reaches, &current_player, self.game_state.traverser_pot.get(), self.game_state.opponent_pot.get())
                     },
                     _ => {
                         self.handle_or_create_subtree(reaches)
@@ -548,7 +537,7 @@ impl<'a> CbvSubTree<'a> {
                 println!("Showdown");
                 match self.solving_state {
                     SolvingState::Solving => {
-                        self.evaluate_showdown(&reaches, pot_before_action)
+                        self.evaluate_showdown(reaches, pot_before_action)
                     },
                     _ => {
                         self.handle_or_create_subtree(reaches)
@@ -569,7 +558,7 @@ impl<'a> CbvSubTree<'a> {
     }
 
     pub fn evaluate_showdown(&self, reaches: &HoleCardReaches, current_player_pot: u8) -> HoleCardPayoffs {
-        let board_cards: [Card; 5] = self.dealt_board_cards.iter().map(|card| *card).collect::<Vec<_>>().try_into().expect(format!("Are we on the river {}, action history, {:?}", self.game_state.is_river(), self.action_history).as_str());
+        let board_cards: [Card; 5] = self.dealt_board_cards.to_vec().try_into().unwrap_or_else(|_| panic!("Are we on the river {}, action history, {:?}", self.game_state.is_river(), self.action_history));
         let traverser_hand_rankings = self.hole_card_rankings_player(reaches, Player::Traverser, &board_cards);
         let opponent_hand_rankings = self.hole_card_rankings_player(reaches, Player::Opponent, &board_cards);
 
@@ -655,8 +644,8 @@ impl<'a> CbvSubTree<'a> {
 
     fn traverse_deal(&mut self, reaches: &HoleCardReaches, depth: usize) -> HoleCardPayoffs {
         let previous_player = self.game_state.current_player.get();
-        let previous_bets = self.game_state.bets_this_round.get();
-        let checks_before = self.game_state.checks_this_round.get();
+        let previous_bets = self.game_state.bets_this_street.get();
+        let checks_before = self.game_state.checks_this_street.get();
 
         let mut payoffs = HoleCardPayoffs::default();
         let potential_next_cards = self.get_potential_next_cards();
@@ -678,8 +667,8 @@ impl<'a> CbvSubTree<'a> {
     }
 
     fn get_potential_next_cards(&self) -> Vec<Card> {
-        let remaining_cards = (0..52).map(|card_int| Card::from_int(card_int)).filter(|card| !self.dealt_board_cards.contains(card)).collect::<Vec<_>>();
-        remaining_cards
+        
+        (0..52).map(Card::from_int).filter(|card| !self.dealt_board_cards.contains(card)).collect::<Vec<_>>()
     }
 
     fn get_strategy(&self, hole_cards: &(Card, Card), current_player: &Player,  round: usize, current_player_pot: u8, bets_this_round: u8, num_available_actions: usize) -> [f64; DEFAULT_ACTION_COUNT] {
@@ -690,11 +679,11 @@ impl<'a> CbvSubTree<'a> {
             .get(&strategy_hub_key)
             .and_then(|strategy_branch| strategy_branch.get_strategy(&game_abstraction).cloned());
     
-        let strategy = match strategy {
+        
+        match strategy {
             Some(strategy) => strategy.get_current_strategy(0),
             None => [1.0 / (num_available_actions as f64); DEFAULT_ACTION_COUNT],
-        };
-        strategy
+        }
     }
 
     fn get_abstraction_cache(&self, hole_cards: &(Card, Card), round: usize, game_pot: u8, bets_this_round: u8) -> GameAbstractionSerialised {
@@ -723,9 +712,9 @@ fn convert_actions_to_game_state(actions: &[Action], sb_player: Player) -> GameS
         current_player: Cell::new(game_state_from_actions.current_player),
         small_blind_player: game_state_from_actions.small_blind_player,
         big_blind_player: game_state_from_actions.big_blind_player,
-        bets_this_round: Cell::new(game_state_from_actions.bets_this_round),
+        bets_this_street: Cell::new(game_state_from_actions.bets_this_round),
         winner: None,
-        checks_this_round: Cell::new(game_state_from_actions.checks_this_round),
+        checks_this_street: Cell::new(game_state_from_actions.checks_this_round),
     }
 }
 
@@ -783,8 +772,7 @@ fn actions_to_state(actions: &[Action], small_blind_player: Player) -> GameState
             _ => {}
         }
     };
-    // println!("Current player: {:?}", current_player);
-    // println!("Small blind player: {}", small_blind_player);
+    
     GameStateFromActions {
         partial_deal,
         traverser_pot,
@@ -797,28 +785,3 @@ fn actions_to_state(actions: &[Action], small_blind_player: Player) -> GameState
         current_player,
     }
 }
-
-
-// // Returns a list of action_histories where the opponent has just acted so we can calculate any gifts
-// fn create_action_histories_which_can_gift_us(actions: &[Action], looking_for_sb: bool) -> Vec<Vec<Action>> {
-//     let mut action_states = vec![];
-//     let mut current_state = vec![];
-//     let mut is_sb = true;
-//     for action in actions {
-//         current_state.push(action.clone());
-
-//         // If the opponent has just acted, add the current state to the list of states we will track
-//         if is_sb == looking_for_sb {
-//             action_states.push(current_state.clone());
-//         }
-//         match action {
-//             Action::Deal(_) => {
-//                 is_sb = false;
-//             },
-//             _ => {
-//                 is_sb = !is_sb;
-//             }
-//         }
-//     }
-//     action_states
-// }
