@@ -3,7 +3,7 @@ use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::hash::{Hash, Hasher};
-use std::vec;
+use std::{u16, vec};
 
 use dashmap::DashMap;
 use indicatif::{ParallelProgressIterator, ProgressBar, ProgressIterator, ProgressStyle};
@@ -585,7 +585,7 @@ impl<'a> CbvSubTree<'a> {
         let mut evaluations = HashMap::new();
 
         for card in hole_cards {
-            let rank = EVALUATOR.evaluate_seven(&[card.0, card.1], board_cards);
+            let rank = EVALUATOR.evaluate_seven(&[card.0, card.1], board_cards, u16::MAX);
             evaluations.insert(**card, rank);
         }
 

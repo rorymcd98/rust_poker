@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{config::BLUEPRINT_FOLDER, models::{card::{all_pocket_pairs, all_rank_combos, Rank}, Card, Player, Suit}, traversal::{action_history::{action::DEFAULT_ACTION_COUNT, game_abstraction::{convert_deal_into_abstraction, GameAbstraction, GameAbstractionSerialised}}, game_state::game_state_helper::GameStateHelper, strategy::{play_strategy::PlayStrategy, strategy_branch::{StrategyBranch, StrategyHubKey}, strategy_hub::deserialise_strategy_hub, strategy_trait::Strategy, training_strategy::TrainingStrategy}}};
+use crate::{config::BLUEPRINT_FOLDER, models::{card::{all_pocket_pairs, all_rank_combos, new_random_nine_card_game_with}, Card, Player, Suit}, traversal::{action_history::{action::DEFAULT_ACTION_COUNT, game_abstraction::{convert_deal_into_abstraction, GameAbstraction, GameAbstractionSerialised}}, game_state::game_state_helper::GameStateHelper, strategy::{play_strategy::PlayStrategy, strategy_branch::{StrategyBranch, StrategyHubKey}, strategy_hub::deserialise_strategy_hub, strategy_trait::Strategy, training_strategy::TrainingStrategy}}};
 
 pub fn validate_strategies(){
     let mut strategy_map: HashMap<StrategyHubKey, StrategyBranch<TrainingStrategy>> = deserialise_strategy_hub(BLUEPRINT_FOLDER).unwrap();
@@ -26,7 +26,7 @@ pub fn generate_preflop_abstractions() -> Vec<(StrategyHubKey, GameAbstractionSe
     for cards in combos {
         let card1 = Card::new(Suit::Spades, cards.0);
         let card2 = Card::new(Suit::Clubs, cards.1);
-        let deal = Card::new_random_nine_card_game_with(card1, card2, Card::default(), Card::default());
+        let deal = new_random_nine_card_game_with(card1, card2, Card::default(), Card::default());
         let game_abstraction = convert_deal_into_abstraction(deal);
         let key = StrategyHubKey {
             low_rank: card1.rank,

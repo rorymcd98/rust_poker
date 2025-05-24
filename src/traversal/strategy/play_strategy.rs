@@ -2,6 +2,7 @@ use crate::traversal::action_history::action::{self, DEFAULT_ACTION_COUNT};
 
 use super::{strategy_trait::Strategy, training_strategy::{self, TrainingStrategy}};
 
+/// A strategy used at runtime for playing / evaluating a game
 #[derive(Debug, Clone)]
 pub struct PlayStrategy {
     pub actions: usize,
@@ -18,7 +19,7 @@ impl Strategy for PlayStrategy {
         play_strategy[0] = 1.0; // TODO - Assess if this at all likely
         PlayStrategy { actions: 0, play_strategy}
     }
-
+    
     fn get_current_strategy(&self, _iteration: usize) -> [f64; DEFAULT_ACTION_COUNT] {
         self.play_strategy
     }

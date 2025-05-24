@@ -27,7 +27,7 @@ const ALPHA: f64 = 1.5;
 const BETA: f64 = 0.85;
 const GAMMA: f64 = 4.0;
 
-/// Strategy struct to hold the current strategy and the sum of all strategies
+/// A strategy to hold the current counter factual regrets and strategy probabilities while training
 #[derive(Clone, Debug)]
 pub struct TrainingStrategy {
     pub actions: usize,
@@ -55,7 +55,7 @@ impl Strategy for TrainingStrategy {
     fn from_existing_strategy(actions: usize, strategy: [f64; DEFAULT_ACTION_COUNT]) -> Self {
         TrainingStrategy {
             actions: actions,
-            strategy_sum: strategy, // TODO - I did this when removing the current strategy ... not sure if correct
+            strategy_sum: strategy,
             regrets_sum: [0f64; DEFAULT_ACTION_COUNT],
         }
     }

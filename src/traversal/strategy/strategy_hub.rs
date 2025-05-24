@@ -21,7 +21,9 @@ pub struct StrategyPair<TStrategy: Strategy> {
     pub bb_branch: StrategyBranch<TStrategy>,
 }
 
-// TODO - this needs a total reword. Instead should generate a long list of combinations which we can pop off
+/// A hub for storing a list of randomised strategy keys which can be used for training iterations
+/// It attempts to generate an unbiased list of keys such that the number of un/suited, and pocket-pair hands are realistic
+/// N.B - The current implementation is not that efficient, and will fail at threads counts close to 26 
 #[derive(Debug)]
 pub struct StrategyHub<TStrategy: Strategy + Debug> {
     out_queue: ConcurrentQueue<StrategyPair<TStrategy>>,
@@ -206,9 +208,11 @@ use flate2::read::GzDecoder;
 use std::fs::File;
 use std::io::Read;
 
+/// Serialise the strategy hub to disk using a compression library (in this case GZIP)
+/// N.B. - At this point we cannot turn our strategy hub back into a TrainingStrategy hub, at this point it can only be used for play / evaluation - this means training must happen all at once
 pub fn serialise_strategy_hub(
     output_folder: &str,
-    mut strategy_hub: StrategyHub<TrainingStrategy>,
+    strategy_hub: StrategyHub<TrainingStrategy>,
 ) -> io::Result<()> {
     let strategy_hub = strategy_hub.into_map();
     println!("serialising strategy hub to {}", output_folder);
@@ -234,6 +238,7 @@ pub fn serialise_strategy_hub(
                     {
                         let mut array = [0.0; DEFAULT_ACTION_COUNT + 1];
                         array[0] = v.actions as f64;
+                        // TODO - We could save some info here, one of the probabilities adds no entropy, we can determine it from the other two
                         array[1..].copy_from_slice(&PlayStrategy::from_train_strategy(v).get_current_strategy(0));
                         array
                     },
@@ -312,8 +317,6 @@ pub fn deserialise_strategy_hub<TStrategy: Strategy + Debug + Send + Sync + 'sta
                     .trim_end_matches(".json")
                 }
             )?;
-
-            // println!("Deserialising strategy hub element {}", strategy_hub_element_key);
             
             let map = deserialised.into_iter().map(|(k, v)| {
                 let infoset_key = base64::engine::general_purpose::STANDARD.decode(&k).map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "Invalid base64 key"))?;

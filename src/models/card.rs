@@ -8,11 +8,63 @@ use std::{
 /// A 9 card deal, 2 for traverser, 2 for opponent, 5 for board
 pub type NineCardDeal = [Card; 9];
 
+/// Returns a string representation of a 9 card deal
 pub fn deal_string(deal: &NineCardDeal) -> String {
     format!(
         "P1 [{}, {}] P2 [{}, {}] Board [{}, {}, {}, {}, {}]",
         deal[0], deal[1], deal[2], deal[3], deal[4], deal[5], deal[6], deal[7], deal[8]
     )
+}
+
+pub fn new_random_nine_card_game_with(
+    card1: Card,
+    card2: Card,
+    card3: Card,
+    card4: Card,
+) -> NineCardDeal {
+    let mut taken = [false; 52];
+    let mut res = [Card::default(); 9];
+    taken[card1.to_int() as usize] = true;
+    taken[card2.to_int() as usize] = true;
+    taken[card3.to_int() as usize] = true;
+    taken[card4.to_int() as usize] = true;
+    res[0] = card1;
+    res[1] = card2;
+    res[2] = card3;
+    res[3] = card4;
+
+    let mut count = 4;
+    with_rng(|rng| {
+        while count < 9 {
+            let card_int = rng.gen::<u8>() % 52;
+            if taken[card_int as usize] {
+                continue;
+            }
+            taken[card_int as usize] = true;
+            res[count] = Card::from_int(card_int);
+            count += 1;
+        }
+    });
+    res
+}
+
+/// Returns a new random 9 card game
+pub fn new_random_nine_card_game() -> NineCardDeal {
+    let mut taken = [false; 52];
+    let mut res = [Card::default(); 9];
+    let mut count = 0;
+    with_rng(|rng| {
+        while count < 9 {
+            let card_int = rng.gen::<u8>() % 52;
+            if taken[card_int as usize] {
+                continue;
+            }
+            taken[card_int as usize] = true;
+            res[count] = Card::from_int(card_int);
+            count += 1;
+        }
+    });
+    res
 }
 
 /// A card suit
@@ -276,56 +328,6 @@ impl Card {
         res
     }
 
-    pub fn new_random_nine_card_game_with(
-        card1: Card,
-        card2: Card,
-        card3: Card,
-        card4: Card,
-    ) -> NineCardDeal {
-        let mut taken = [false; 52];
-        let mut res = [Card::default(); 9];
-        taken[card1.to_int() as usize] = true;
-        taken[card2.to_int() as usize] = true;
-        taken[card3.to_int() as usize] = true;
-        taken[card4.to_int() as usize] = true;
-        res[0] = card1;
-        res[1] = card2;
-        res[2] = card3;
-        res[3] = card4;
-
-        let mut count = 4;
-        with_rng(|rng| {
-            while count < 9 {
-                let card_int = rng.gen::<u8>() % 52;
-                if taken[card_int as usize] {
-                    continue;
-                }
-                taken[card_int as usize] = true;
-                res[count] = Card::from_int(card_int);
-                count += 1;
-            }
-        });
-        res
-    }
-
-    pub fn new_random_9_card_game() -> NineCardDeal {
-        let mut taken = [false; 52];
-        let mut res = [Card::default(); 9];
-        let mut count = 0;
-        with_rng(|rng| {
-            while count < 9 {
-                let card_int = rng.gen::<u8>() % 52;
-                if taken[card_int as usize] {
-                    continue;
-                }
-                taken[card_int as usize] = true;
-                res[count] = Card::from_int(card_int);
-                count += 1;
-            }
-        });
-        res
-    }
-
     fn serialise_int(card_int: u8) -> u8 {
         let suit = card_int / 13;
         let rank = card_int % 13;
@@ -549,7 +551,7 @@ mod tests {
     #[test]
     fn test_new_random_9_card() {
         for _ in 0..10_000 {
-            let cards = Card::new_random_9_card_game();
+            let cards = new_random_nine_card_game();
             assert_eq!(cards.len(), 9);
             let mut seen = HashSet::new();
             for card in cards {
@@ -566,7 +568,7 @@ mod tests {
         let card3 = Card::new(Suit::Diamonds, Rank::Four);
         let card4 = Card::new(Suit::Clubs, Rank::King);
         for _ in 0..10_000 {
-            let cards = Card::new_random_nine_card_game_with(card1, card2, card3, card4);
+            let cards = new_random_nine_card_game_with(card1, card2, card3, card4);
             assert_eq!(cards.len(), 9);
             let mut seen = HashSet::new();
             for card in cards {
@@ -591,7 +593,7 @@ mod tests {
         let existing_cards = Card::new_random_cards(4);
         let start = Instant::now();
         for _ in 0..100_000 {
-            _ = Card::new_random_nine_card_game_with(
+            _ = new_random_nine_card_game_with(
                 existing_cards[0],
                 existing_cards[1],
                 existing_cards[2],

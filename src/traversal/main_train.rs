@@ -1,13 +1,13 @@
+use rand::seq::SliceRandom;
 use rand::Rng;
 use crate::config::*;
-use crate::validation::validate_strategy_map;
 use super::game_state::game_state_helper::GameStateHelper;
 use super::game_state::terminal_state::TerminalState;
 use super::strategy::strategy_trait::Strategy;
 use super::strategy::training_strategy::{sample_strategy, TrainingStrategy};
 use super::strategy::strategy_branch::{StrategyBranch, StrategyHubKey};
 use super::strategy::strategy_hub::{deserialise_strategy_hub, serialise_strategy_hub, StrategyHub, StrategyPair};
-use crate::models::card::{all_pocket_pairs, all_rank_combos};
+use crate::models::card::{all_pocket_pairs, all_rank_combos, new_random_nine_card_game_with};
 use crate::models::Card;
 use crate::models::Player;
 use crate::models::Suit;
@@ -36,33 +36,59 @@ pub fn begin_tree_train_traversal() {
     serialise_strategy_hub(BLUEPRINT_FOLDER, strategy_hub).expect("Failed to serialise strategy hub");
 }
 
+// Get unique cards ensuring that there's no overlap between the two hands, and no sampling bias
 pub fn get_unique_cards(sb_key: &StrategyHubKey, bb_key: &StrategyHubKey) -> [Card; 4] {
+    // First two cards (SB hand)
     let card1 = Card::new(Suit::Spades, sb_key.low_rank);
-    let mut card2 = Card::new(Suit::Spades, sb_key.high_rank);
-    let mut card3 = Card::new(Suit::Spades, bb_key.low_rank);
-    let mut card4 = Card::new(Suit::Spades, bb_key.high_rank);
+    let card2 = if sb_key.is_suited {
+        Card::new(Suit::Spades, sb_key.high_rank)
+    } else {
+        Card::new(Suit::Clubs, sb_key.high_rank)
+    };
     
-    if !sb_key.is_suited {
-        card2.suit = Suit::Clubs; 
+    let sb_cards = [card1, card2];
+    
+    // Generate all valid combinations for BB hand
+    let mut valid_combinations = Vec::new();
+    
+    if bb_key.is_suited {
+        // BB hand is suited - both cards must have same suit
+        for suit in [Suit::Spades, Suit::Hearts, Suit::Diamonds, Suit::Clubs] {
+            let card3 = Card::new(suit, bb_key.low_rank);
+            let card4 = Card::new(suit, bb_key.high_rank);
+            
+            // Check if this combination conflicts with SB cards
+            if !sb_cards.contains(&card3) && !sb_cards.contains(&card4) {
+                valid_combinations.push([card3, card4]);
+            }
+        }
+    } else {
+        // BB hand is offsuit - cards can have different suits
+        for suit3 in [Suit::Spades, Suit::Hearts, Suit::Diamonds, Suit::Clubs] {
+            for suit4 in [Suit::Spades, Suit::Hearts, Suit::Diamonds, Suit::Clubs] {
+                // Skip if both cards would have the same suit (since it's offsuit)
+                if suit3 == suit4 {
+                    continue;
+                }
+                
+                let card3 = Card::new(suit3, bb_key.low_rank);
+                let card4 = Card::new(suit4, bb_key.high_rank);
+                
+                // Check if this combination conflicts with SB cards
+                if !sb_cards.contains(&card3) && !sb_cards.contains(&card4) {
+                    valid_combinations.push([card3, card4]);
+                }
+            }
+        }
     }
-
+    
+    // Sample uniformly from valid combinations
     with_rng(|rng| {
-        if card3 == card1 || card3 == card2 || rng.gen_bool(0.75) { // TODO - I'm not sure if these two 0.75 probabilities are correct but it is probabbly fine
-            card3.suit = Suit::Hearts;
-        }
-        if bb_key.is_suited {
-            card4.suit = card3.suit;
-            if card4 == card1 || card4 == card2 {
-                card3.suit = Suit::Hearts;
-                card4.suit = Suit::Hearts;
-            }
-        } else {
-            if card4 == card1 || card4 == card2 || card4 == card3 || rng.gen_bool(0.75) {
-                card4.suit = Suit::Diamonds;
-            }
-        }
-    });
-    [card1, card2, card3, card4]
+        let bb_cards = valid_combinations.choose(rng)
+            .expect("No valid card combinations found");
+        
+        [card1, card2, bb_cards[0], bb_cards[1]]
+    })
 }
 
 fn spawn_training_thread_work(strategy_hub: Arc<StrategyHub<TrainingStrategy>>) -> JoinHandle<()> {
@@ -81,13 +107,13 @@ fn spawn_training_thread_work(strategy_hub: Arc<StrategyHub<TrainingStrategy>>) 
 
             for player in players {
                 let deal = match player {
-                    Player::Traverser => Card::new_random_nine_card_game_with(
+                    Player::Traverser => new_random_nine_card_game_with(
                         cards[0],
                         cards[1],
                         cards[2],
                         cards[3],
                     ),
-                    Player::Opponent => Card::new_random_nine_card_game_with(
+                    Player::Opponent => new_random_nine_card_game_with(
                         cards[2],
                         cards[3],
                         cards[0],

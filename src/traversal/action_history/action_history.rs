@@ -134,10 +134,11 @@ pub fn validate_history(history: &Vec<Action>) {
 }
 
 
-// A live record of the game state that also acts as a key to the various strategies
+/// A live record of the game state that also acts as a key to the various strategies
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[deprecated = "Use GameAbstraction instead as it allows a much more reduced game state which is feasible to traverse"]
 pub struct ActionHistory {
-    pub history: Vec<Action>, // TODO - Try to make this a mutable reference
+    pub history: Vec<Action>,
 }
 
 impl ActionHistory {
@@ -171,7 +172,6 @@ impl ActionHistory {
         serialised_history
     }
 
-    // TODO - this needs to be reconfisdered for the strategy_branch
     // Create an 'impossible' 2-bit or 8-bit sequence indicating to the deserialiser that the history is complete
     fn get_terminal_serialisation(action: &Action) -> u8 {
         match action {

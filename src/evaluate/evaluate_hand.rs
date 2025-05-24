@@ -1,7 +1,11 @@
+use std::u16;
+
+use itertools::Itertools;
+
 use super::generate_tables::generate_flush_table::generate_flushes_table;
 use super::generate_tables::generate_remaining_table::generate_remaining_table;
 use super::generate_tables::generate_unique_five_table::generate_unique_five_table;
-use crate::models::card::NineCardDeal;
+use crate::models::card::{NineCardDeal, new_random_nine_card_game};
 use crate::models::Card;
 use crate::models::Player;
 
@@ -145,8 +149,12 @@ impl HandLookup for HandLookupArrays {
 /// 7463 is a Royal Flush
 /// 1 is a High Card 7
 pub trait HandEvaluator {
+    /// Evaluate a 5 card hand into its absolute rank amongs all 5 card hands 
     fn evaluate_five(&self, cards: [Card; 5]) -> u16;
-    fn evaluate_seven(&self, hole_cards: &[Card; 2], board_cards: &[Card; 5]) -> u16;
+    /// Evaluate a 7 card deal into its maximum 5 card deal 
+    /// The short_circuit parameter allows us to return early if we encounter a greater value
+    fn evaluate_seven(&self, hole_cards: &[Card; 2], board_cards: &[Card; 5], short_circuit: u16) -> u16;
+    /// Evaluate which player has the best 7 card deal [2 Traverser cards] [2 Opponent cards] [7 Board cards]
     fn evaluate_nine(&self, deal: &[Card; 9]) -> Option<Player>;
 }
 
@@ -204,8 +212,8 @@ impl HandEvaluator for HandEvaluatorLookup {
         let traverser_cards: &[Card; 2] = deal[0..2].try_into().expect("Traverser cards are not 2 cards");
         let opponenet_cards: &[Card; 2] = deal[2..4].try_into().expect("Opponent cards are not 2 cards");
 
-        let best_score_traverser = self.evaluate_seven(traverser_cards, board);
-        let best_score_opponent = self.evaluate_seven(opponenet_cards, board);
+        let best_score_traverser = self.evaluate_seven(traverser_cards, board, u16::MAX);
+        let best_score_opponent = self.evaluate_seven(opponenet_cards, board, best_score_traverser);
 
         match best_score_traverser.cmp(&best_score_opponent) {
             std::cmp::Ordering::Greater => Some(Player::Traverser),
@@ -214,30 +222,41 @@ impl HandEvaluator for HandEvaluatorLookup {
         }
     }
 
-    fn evaluate_seven(&self, &hole_cards: &[Card; 2], board_cards: &[Card; 5]) -> u16{
-        let mut max_score = 0;
-        max_score = max_score.max(self.evaluate_five([hole_cards[0], hole_cards[1], board_cards[0], board_cards[1], board_cards[2]]));
-        max_score = max_score.max(self.evaluate_five([hole_cards[0], hole_cards[1], board_cards[0], board_cards[1], board_cards[3]]));
-        max_score = max_score.max(self.evaluate_five([hole_cards[0], hole_cards[1], board_cards[0], board_cards[1], board_cards[4]]));
-        max_score = max_score.max(self.evaluate_five([hole_cards[0], hole_cards[1], board_cards[0], board_cards[2], board_cards[3]]));
-        max_score = max_score.max(self.evaluate_five([hole_cards[0], hole_cards[1], board_cards[0], board_cards[2], board_cards[4]]));
-        max_score = max_score.max(self.evaluate_five([hole_cards[0], hole_cards[1], board_cards[0], board_cards[3], board_cards[4]]));
-        max_score = max_score.max(self.evaluate_five([hole_cards[0], hole_cards[1], board_cards[1], board_cards[2], board_cards[3]]));
-        max_score = max_score.max(self.evaluate_five([hole_cards[0], hole_cards[1], board_cards[1], board_cards[2], board_cards[4]]));
-        max_score = max_score.max(self.evaluate_five([hole_cards[0], hole_cards[1], board_cards[1], board_cards[3], board_cards[4]]));
-        max_score = max_score.max(self.evaluate_five([hole_cards[0], hole_cards[1], board_cards[2], board_cards[3], board_cards[4]]));
-        max_score = max_score.max(self.evaluate_five([hole_cards[0], board_cards[0], board_cards[1], board_cards[2], board_cards[3]]));
-        max_score = max_score.max(self.evaluate_five([hole_cards[0], board_cards[0], board_cards[1], board_cards[2], board_cards[4]]));
-        max_score = max_score.max(self.evaluate_five([hole_cards[0], board_cards[0], board_cards[1], board_cards[3], board_cards[4]]));
-        max_score = max_score.max(self.evaluate_five([hole_cards[0], board_cards[0], board_cards[2], board_cards[3], board_cards[4]]));
-        max_score = max_score.max(self.evaluate_five([hole_cards[0], board_cards[1], board_cards[2], board_cards[3], board_cards[4]]));
-        max_score = max_score.max(self.evaluate_five([hole_cards[1], board_cards[0], board_cards[1], board_cards[2], board_cards[3]]));
-        max_score = max_score.max(self.evaluate_five([hole_cards[1], board_cards[0], board_cards[1], board_cards[2], board_cards[4]]));
-        max_score = max_score.max(self.evaluate_five([hole_cards[1], board_cards[0], board_cards[1], board_cards[3], board_cards[4]]));
-        max_score = max_score.max(self.evaluate_five([hole_cards[1], board_cards[0], board_cards[2], board_cards[3], board_cards[4]]));
-        max_score = max_score.max(self.evaluate_five([hole_cards[1], board_cards[1], board_cards[2], board_cards[3], board_cards[4]]));
-        max_score = max_score.max(self.evaluate_five([board_cards[0], board_cards[1], board_cards[2], board_cards[3], board_cards[4]]));
+    fn evaluate_seven(&self, hole_cards: &[Card; 2], board_cards: &[Card; 5], short_circuit: u16) -> u16 {
+        let mut cards = Vec::with_capacity(7);
+        cards.extend_from_slice(hole_cards);
+        cards.extend_from_slice(board_cards);
     
+        let mut max_score = 0;
+
+        if short_circuit == u16::MAX{
+            for combo in cards.iter().combinations(5) {
+                let hand = [
+                    *combo[0],
+                    *combo[1],
+                    *combo[2],
+                    *combo[3],
+                    *combo[4],
+                ];
+                let score = self.evaluate_five(hand);
+                max_score = max_score.max(score);
+            }
+        } else {
+            for combo in cards.iter().combinations(5) {
+                let hand = [
+                    *combo[0],
+                    *combo[1],
+                    *combo[2],
+                    *combo[3],
+                    *combo[4],
+                ];
+                let score = self.evaluate_five(hand);
+                if short_circuit != u16::MAX && score > short_circuit {
+                    return score;
+                }
+                max_score = max_score.max(score);
+            }
+        }
         max_score
     }
 }
@@ -288,7 +307,7 @@ mod tests {
     #[test]
     fn test_performance_9_card() {
         _ = &*EVALUATOR;
-        let hands: Vec<NineCardDeal> = (0..100).map(|_| Card::new_random_9_card_game()).collect();
+        let hands: Vec<NineCardDeal> = (0..100).map(|_| new_random_nine_card_game()).collect();
         let start = std::time::Instant::now();
         for i in 0..EVALS {
             let _ = EVALUATOR.evaluate_nine(&hands[i % 100]);
@@ -316,7 +335,7 @@ mod tests {
     #[test]
     fn order_invariance_nine_card_game() {
         for _ in 0..EVALS {
-            let game = Card::new_random_9_card_game();
+            let game = new_random_nine_card_game();
             let first_eval = EVALUATOR.evaluate_nine(&game);
             let mut rng = rand::thread_rng();
             for perm in game[4..9].iter().permutations(5) {

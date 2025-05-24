@@ -1,11 +1,7 @@
-use crate::models::{
-    card::{Card, Rank},
-    player,
-};
+use crate::models::card::{Card, Rank};
 use std::fmt::Display;
 
-// TODO - assess if this abstraction makes sense
-// Bucket ints to A-K, Q-9, 8-..
+///  Bucket ints to A-K, Q-9, 8-6, 5-2
 fn bucket_rank(rank_int: usize) -> Rank {
     match rank_int {
         1..5 => Rank::Five,
@@ -16,10 +12,13 @@ fn bucket_rank(rank_int: usize) -> Rank {
     }
 }
 
+/// Abstraction of a straight (part of the game abstraction)
 pub struct StraightAbstraction {
-    //TODO - there will be noise here potentially (?) Q6 and J6  with the board being T987 - do we resolve the right strategy here?
+    /// The highest card, but bucketed according to rank
     pub bucketed_high_card: Rank, // Can be further bucketed e.g. A-K, Q-T, 9-5
+    /// The number of cards in the straight
     pub cards_in_straight: u8,    // 0, 1, (& 2 on flop)
+    /// Whether the straight requires a gutshot
     pub requires_gutshot: bool,
 }
 
@@ -54,7 +53,7 @@ impl StraightAbstraction {
 }
 
 // TODO - method needs refactoring!
-// Find the highest straight that is either length 4 with a gutshot, or length 3-5 without a gutshot
+/// Find the highest straight that is either length 4 with a gutshot, or length 3-5 without a gutshot
 pub fn get_straight_abstraction(
     hole_cards: &[Card; 2],
     board_cards: &[Card],
@@ -147,11 +146,10 @@ pub fn get_straight_abstraction(
     }
 
     if highest_non_player_straight_card > (openended_high_card.max(gutshot_high_card) as u8) {
-        // If the highest straight is on the board,
+        // If the highest straight is on the board, we don't care about the abstraction
         return None;
     }
 
-    // TODO - Must test this
     if 5 - longest_straight_with_gutshot.max(longest_straight_without_gutshot)
         > 5 - board_cards.len() as u8
     {
@@ -160,7 +158,7 @@ pub fn get_straight_abstraction(
     }
 
     if longest_straight_with_gutshot > longest_straight_without_gutshot {
-        // If the best gutshot is better than the best open-ended straight,
+        // If the best gutshot is better than the best open-ended straight, use the gutshot
         Some(StraightAbstraction {
             bucketed_high_card: bucket_rank(gutshot_high_card - 1), // -1 due to low ace
             cards_in_straight: longest_straight_with_gutshot,
@@ -174,6 +172,7 @@ pub fn get_straight_abstraction(
             requires_gutshot: false,
         });
     } else {
+        // Otherwise there is no straight or straight draw
         return None;
     }
 }
