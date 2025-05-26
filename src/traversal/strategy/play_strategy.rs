@@ -1,3 +1,5 @@
+use std::fmt::{Display, Formatter};
+
 use super::{strategy_trait::Strategy, training_strategy::TrainingStrategy};
 use crate::traversal::action_history::action::DEFAULT_ACTION_COUNT;
 
@@ -64,5 +66,28 @@ impl PlayStrategy {
             actions: train_strategy.actions,
             play_strategy: return_strategy,
         }
+    }
+}
+
+impl Display for PlayStrategy {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self.actions {
+                2 => format!(
+                    "Check/Fold {:.1}%, Bet/Call {:.1}%",
+                    self.play_strategy[0] * 100.0,
+                    self.play_strategy[1] * 100.0
+                ),
+                3 => format!(
+                    "Check/Fold {:.1}%, Call {:.1}%, Bet {:.1}%",
+                    self.play_strategy[0] * 100.0,
+                    self.play_strategy[1] * 100.0,
+                    self.play_strategy[2] * 100.0
+                ),
+                _ => panic!("Unhandled number of actions"),
+            }
+        )
     }
 }

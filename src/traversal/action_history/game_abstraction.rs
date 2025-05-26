@@ -19,7 +19,7 @@ pub fn to_string_game_abstraction(
     abstraction: &GameAbstractionSerialised,
 ) -> String {
     let round = abstraction[0];
-    let game_pot = abstraction[1];
+    let current_player_pot = abstraction[1];
     let bets_this_round = abstraction[2];
     let round_abstraction = CardRoundAbstraction::deserialise(&abstraction[3..]);
 
@@ -36,7 +36,7 @@ pub fn to_string_game_abstraction(
             3 => "R",
             _ => panic!("Invalid round {}", round),
         },
-        game_pot,
+        current_player_pot,
         bets_this_round,
         round_abstraction
     )
@@ -57,7 +57,7 @@ impl GameAbstraction {
     pub fn get_abstraction(
         &self,
         round: usize,
-        game_pot: u8,
+        current_player_pot: u8,
         bets_this_round: u8,
         current_player: &Player,
     ) -> GameAbstractionSerialised {
@@ -70,7 +70,7 @@ impl GameAbstraction {
 
         let mut serialised = vec![];
         serialised.push(round as u8);
-        serialised.push(game_pot);
+        serialised.push(current_player_pot);
         serialised.push(bets_this_round);
         serialised.extend(round_abstraction.clone());
         serialised
@@ -78,7 +78,7 @@ impl GameAbstraction {
 
     pub fn get_abstraction_from_round(
         round: usize,
-        game_pot: u8,
+        current_player_pot: u8,
         bets_this_round: u8,
         round_abstraction: CardRoundAbstractionSerialised,
     ) -> GameAbstractionSerialised {
@@ -86,7 +86,7 @@ impl GameAbstraction {
         // [round] [game pot] [round bets] [ ... round abstraction ...]
         let mut serialised = vec![];
         serialised.push(round as u8);
-        serialised.push(game_pot);
+        serialised.push(current_player_pot);
         serialised.push(bets_this_round);
         serialised.extend(round_abstraction.clone());
         serialised
@@ -116,13 +116,13 @@ pub fn get_current_abstraction(
     hole_cards: &(Card, Card),
     board_cards: &[Card],
     round: usize,
-    game_pot: u8,
+    current_player_pot: u8,
     bets_this_round: u8,
 ) -> GameAbstractionSerialised {
     let card_round_abstraction = convert_cards_into_card_abstraction(hole_cards, board_cards);
     GameAbstraction::get_abstraction_from_round(
         round,
-        game_pot,
+        current_player_pot,
         bets_this_round,
         card_round_abstraction,
     )

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     config::BLUEPRINT_FOLDER,
     models::{
-        card::{all_pocket_pairs, all_rank_combos, new_random_nine_card_game_with},
+        card::{all_pocket_pairs, all_rank_combos, new_random_nine_card_game_with, Rank},
         Card, Player, Suit,
     },
     traversal::{
@@ -21,6 +21,8 @@ use crate::{
     },
 };
 
+/// Validate our current strategy is "reasonable" by looking at the decisions at various game states.
+/// For example, here we look at the probabilities for the small blind preflop
 pub fn validate_strategies() {
     let strategy_map: HashMap<StrategyHubKey, StrategyBranch<TrainingStrategy>> =
         deserialise_strategy_hub(BLUEPRINT_FOLDER).unwrap();
@@ -32,25 +34,30 @@ pub fn validate_strategy_map<TStrategy: Strategy>(
 ) {
     for abstraction in generate_preflop_abstractions() {
         let strategy_branch = strategy_map.get(&abstraction.0).unwrap();
-        strategy_branch.print_stats();
+        // strategy_branch.print_stats();
         let default_strategy = TrainingStrategy::new(DEFAULT_ACTION_COUNT);
         let strategy = strategy_branch
             .get_strategy(&abstraction.1)
             .unwrap_or(&default_strategy);
-        println!(
-            "{}: strat {:?}, regrets {:?}",
-            abstraction.0,
-            PlayStrategy::from_train_strategy(strategy.clone()).get_current_strategy(100000),
-            strategy.regrets_sum
-        );
+
+        let play_strategy = PlayStrategy::from_train_strategy(strategy.clone()); // iteration is unused for play strategy
+
+        println!("{}: strat {}", abstraction.0, play_strategy);
     }
 }
 
 // Generate all offsuit SB abstractions
 pub fn generate_preflop_abstractions() -> Vec<(StrategyHubKey, GameAbstractionSerialised)> {
+    println!("Strategies for the preflop (first action) small blind, offsuit");
     let mut game_abstractions = Vec::new();
     let mut combos = all_rank_combos();
     combos.extend(all_pocket_pairs());
+    let combos = [
+        (Rank::Two, Rank::Seven),
+        (Rank::Four, Rank::Five),
+        (Rank::Five, Rank::Ten),
+        (Rank::Ace, Rank::Ace),
+    ];
     for cards in combos {
         let card1 = Card::new(Suit::Spades, cards.0);
         let card2 = Card::new(Suit::Clubs, cards.1);

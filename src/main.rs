@@ -1,10 +1,9 @@
 use rust_poker::begin_tree_train_traversal;
-use rust_poker::solve_cbr_utilties2;
+use rust_poker::solve_cbr_utilties;
 use rust_poker::validation::validate_strategies;
 use std::env;
 
 pub fn main() {
-    begin_tree_train_traversal();
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
         eprintln!("Usage: {} <train|solve|validate>", args[0]);
@@ -19,7 +18,7 @@ pub fn main() {
         }
         "solve" => {
             println!("Solving...");
-            solve_cbr_utilties2();
+            solve_cbr_utilties();
         }
         "validate" => {
             println!("Validating...");

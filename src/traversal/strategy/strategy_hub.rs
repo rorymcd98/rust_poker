@@ -360,7 +360,7 @@ pub fn deserialise_strategy_hub<TStrategy: Strategy + Debug + Send + Sync + 'sta
                     array.copy_from_slice(&v[1..]);
                     strategy_size_bytes_uncompressed +=
                         std::mem::size_of_val(&array) + std::mem::size_of_val(&infoset_key);
-                    let play_strategy = TStrategy::from_existing_strategy(v[0] as usize, { array });
+                    let play_strategy = TStrategy::from_existing_strategy(v[0] as usize, array);
                     Ok((infoset_key, play_strategy))
                 })
                 .collect::<Result<HashMap<_, _>, io::Error>>()?;

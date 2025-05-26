@@ -78,7 +78,6 @@ impl<TStrategy: Strategy + Clone> StrategyBranch<TStrategy> {
         }
     }
 
-    #[allow(dead_code)]
     pub fn print_stats(&self) {
         let mut size_in_mb = 0;
         for (info_set, strategy) in self.map.iter() {

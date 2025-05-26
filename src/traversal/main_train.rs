@@ -17,6 +17,9 @@ use std::sync::Arc;
 use std::thread;
 use std::thread::JoinHandle;
 
+/// Train the coarse abstraction using MCCFR. This involves building a strategy hub, taking keys to various SB and BB branches (parts of the abstraction being trained), simulating play, and counting regrets at each traverser decision point.
+///
+/// A number of threads will be allocated for this process, then the abstraction will be save down to disk (can be >1 GB compressed)
 pub fn begin_tree_train_traversal() {
     let strategy_hub = load_or_create_strategy_hub();
     let strategy_hub = Arc::new(strategy_hub);
@@ -226,10 +229,14 @@ impl<'a> TrainingBranchTraverser<'a> {
     }
 
     fn traverse_action(&mut self) -> f64 {
-        match self.game_state.check_street_terminal() {
+        let terminal = self.game_state.check_round_terminal();
+        if !matches!(terminal, TerminalState::Fold) && self.game_state.folded {
+            panic!("We're not catching folds properly"); // TODO can remove at some point
+        }
+        match terminal {
             TerminalState::Showdown => return self.game_state.evaluate_showdown(),
             TerminalState::Fold => return self.game_state.evaluate_fold(),
-            TerminalState::StreetOver => {
+            TerminalState::RoundOver => {
                 if self.game_state.is_preflop() {
                     return self.traverse_flop();
                 }
@@ -241,9 +248,9 @@ impl<'a> TrainingBranchTraverser<'a> {
         let num_available_actions = self.game_state.get_num_available_actions();
 
         let pot_before_action = self.game_state.get_current_player_pot();
-        let bets_before_action = self.game_state.bets_this_street;
+        let bets_before_action = self.game_state.bets_this_round;
         let previous_player = self.game_state.current_player;
-        let checks_before = self.game_state.checks_this_street;
+        let checks_before = self.game_state.checks_this_round;
 
         let training_iteration = self.training_iteration;
 
@@ -314,8 +321,8 @@ impl<'a> TrainingBranchTraverser<'a> {
 
     fn traverse_flop(&mut self) -> f64 {
         let previous_player = self.game_state.current_player;
-        let previous_bets = self.game_state.bets_this_street;
-        let check_before = self.game_state.checks_this_street;
+        let previous_bets = self.game_state.bets_this_round;
+        let check_before = self.game_state.checks_this_round;
         self.game_state.deal_flop();
         let utility = self.traverse_action();
         self.game_state
@@ -325,8 +332,8 @@ impl<'a> TrainingBranchTraverser<'a> {
 
     fn traverse_deal(&mut self) -> f64 {
         let previous_player = self.game_state.current_player;
-        let previous_bets = self.game_state.bets_this_street;
-        let checks_before = self.game_state.checks_this_street;
+        let previous_bets = self.game_state.bets_this_round;
+        let checks_before = self.game_state.checks_this_round;
         self.game_state.deal();
         let utility = self.traverse_action();
         self.game_state

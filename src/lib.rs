@@ -7,5 +7,5 @@ mod thread_utils;
 mod traversal;
 
 pub mod validation;
-pub use subgame_solver::solve::solve_cbr_utilties2;
+pub use subgame_solver::solve::solve_cbr_utilties;
 pub use traversal::main_train::begin_tree_train_traversal;

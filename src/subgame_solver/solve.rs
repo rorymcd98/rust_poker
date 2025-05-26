@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::{u16, vec};
 
-use crate::config::{BIG_BLIND, BLUEPRINT_FOLDER};
+use crate::config::{BIG_BLIND_SIZE, BLUEPRINT_FOLDER};
 use dashmap::DashMap;
 use indicatif::{ParallelProgressIterator, ProgressBar, ProgressStyle};
 use itertools::Itertools;
@@ -66,15 +66,14 @@ struct GameStateFromActions {
     current_player: Player,
 }
 
-// Reach MaxMargin
-// Generate a game state
-// Look at the preceeding node
-// Generate all the game state that could have lead to this node (169 states)
-// For each of these histories calculate the total gift in this manner:
-// 1. Calculate the CBV which can be done using vanilla CFR, multiplying the strategy by the utility for each action
-// 2. Calculate the gift by finding the max of CBV(I) - CBV(I, a) for all a in A(I)
-
-pub fn solve_cbr_utilties2() {
+/// Reach MaxMargin
+/// Generate a game state
+/// Look at the preceeding node
+/// Generate all the game state that could have lead to this node (169 states)
+/// For each of these histories calculate the total gift in this manner:
+/// 1. Calculate the CBV which can be done using vanilla CFR, multiplying the strategy by the utility for each action
+/// 2. Calculate the gift by finding the max of CBV(I) - CBV(I, a) for all a in A(I)
+pub fn solve_cbr_utilties() {
     let strategy_hub = deserialise_strategy_hub::<PlayStrategy>(BLUEPRINT_FOLDER).unwrap();
     let strategy_map = strategy_hub
         .into_iter()
@@ -501,7 +500,7 @@ impl<'a> CbvSubTree<'a> {
         for action in action_history {
             let round = (game_state.cards_dealt).saturating_sub(2) as usize;
             let current_player_pot = game_state.get_current_player_pot();
-            let bets_this_round = game_state.bets_this_street;
+            let bets_this_round = game_state.bets_this_round;
             let num_available_actions = game_state.get_num_available_actions();
             let current_player = game_state.current_player;
 
@@ -629,13 +628,13 @@ impl<'a> CbvSubTree<'a> {
         let pot_before_action = self.game_state.get_current_player_pot();
         let current_player = self.game_state.current_player;
 
-        match self.game_state.check_street_terminal() {
+        match self.game_state.check_round_terminal() {
             TerminalState::None => {
                 let round = (self.game_state.cards_dealt).saturating_sub(2) as usize;
-                let bets_this_round = self.game_state.bets_this_street;
-                let bets_before_action = self.game_state.bets_this_street;
+                let bets_this_round = self.game_state.bets_this_round;
+                let bets_before_action = self.game_state.bets_this_round;
                 let previous_player = self.game_state.current_player;
-                let checks_before = self.game_state.checks_this_street;
+                let checks_before = self.game_state.checks_this_round;
 
                 //// Here we're calculating CBV as described in Safe and Nested Subgame Solving for Imperfect-Information Games
                 self.perform_action(
@@ -651,7 +650,7 @@ impl<'a> CbvSubTree<'a> {
                     depth - 1,
                 )
             }
-            TerminalState::StreetOver => self.traverse_deal(reaches, 0),
+            TerminalState::RoundOver => self.traverse_deal(reaches, 0),
             TerminalState::Fold => {
                 println!("Folding");
                 match self.solving_state {
@@ -840,8 +839,8 @@ impl<'a> CbvSubTree<'a> {
 
     fn traverse_deal(&mut self, reaches: &HoleCardReaches, depth: usize) -> HoleCardPayoffs {
         let previous_player = self.game_state.current_player;
-        let previous_bets = self.game_state.bets_this_street;
-        let checks_before = self.game_state.checks_this_street;
+        let previous_bets = self.game_state.bets_this_round;
+        let checks_before = self.game_state.checks_this_round;
 
         let mut payoffs = HoleCardPayoffs::default();
         let potential_next_cards = self.get_potential_next_cards();
@@ -901,7 +900,7 @@ impl<'a> CbvSubTree<'a> {
         &self,
         hole_cards: &(Card, Card),
         round: usize,
-        game_pot: u8,
+        current_player_pot: u8,
         bets_this_round: u8,
     ) -> GameAbstractionSerialised {
         // TODO - Implement cache
@@ -909,7 +908,7 @@ impl<'a> CbvSubTree<'a> {
             hole_cards,
             &self.dealt_board_cards,
             round,
-            game_pot,
+            current_player_pot,
             bets_this_round,
         )
     }
@@ -935,9 +934,10 @@ fn convert_actions_to_game_state(actions: &[Action], sb_player: Player) -> GameS
         current_player: game_state_from_actions.current_player,
         small_blind_player: game_state_from_actions.small_blind_player,
         big_blind_player: game_state_from_actions.big_blind_player,
-        bets_this_street: game_state_from_actions.bets_this_round,
-        winner: None,
-        checks_this_street: game_state_from_actions.checks_this_round,
+        bets_this_round: game_state_from_actions.bets_this_round,
+        winner: None, // TODO - Is this correct?
+        checks_this_round: game_state_from_actions.checks_this_round,
+        folded: false,
     }
 }
 
@@ -979,10 +979,10 @@ fn actions_to_state(actions: &[Action], small_blind_player: Player) -> GameState
                 let multiplier = if cards_dealt < 5 { 1 } else { 2 };
                 match current_player {
                     Player::Traverser => {
-                        traverser_pot = opponent_pot + BIG_BLIND * multiplier;
+                        traverser_pot = opponent_pot + BIG_BLIND_SIZE * multiplier;
                     }
                     Player::Opponent => {
-                        opponent_pot = traverser_pot + BIG_BLIND * multiplier;
+                        opponent_pot = traverser_pot + BIG_BLIND_SIZE * multiplier;
                     }
                 }
                 current_player = current_player.get_opposite();

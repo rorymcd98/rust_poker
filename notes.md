@@ -44,9 +44,6 @@ Move the hole cards abstraction off of the branch
 Reduce the amoutn of cloning
 Do a unit test for split pot evaluations
 
-
-
-
 traverser_pot: 54, opponent_pot: 50, current Tra, bets 4, checks 0
 Folded Opp
 Opp - Action: 1/2
